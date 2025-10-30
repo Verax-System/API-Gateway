@@ -1,80 +1,126 @@
-from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from app import crud
-from app.api import dependencies
-from app.models.user import User as UserModel
-from app.schemas.enums import UserRole
-from app.schemas.user import User as UserSchema, UserCreate
+from app.api.dependencies import get_session, get_current_active_user
+from app.crud.crud_user import crud_user
+from app.schemas.user import User, UserCreate, UserUpdate
+from app.core.security import get_password_hash # Importado para hashear senha
+from app.models.user import User as UserModel # Importado para o endpoint de sync
 
 router = APIRouter()
 
-admin_roles = [UserRole.ADMIN, UserRole.SUPER_ADMIN]
-
-
-@router.post("/", response_model=UserSchema, status_code=status.HTTP_201_CREATED)
-async def create_user(
+# --- NOVO ENDPOINT DE SINCRONIZAÇÃO (FASE 4) ---
+@router.post("/internal/sync_user", response_model=User, status_code=status.HTTP_201_CREATED)
+async def sync_user_profile(
     *,
-    db: AsyncSession = Depends(dependencies.get_db),
+    db: AsyncSession = Depends(get_session),
     user_in: UserCreate,
-    current_user: Optional[UserModel] = Depends(dependencies.get_current_active_user_optional)
-) -> Any:
+):
     """
-    Cria um novo usuário.
-    - Se não houver usuários no sistema, permite a criação do primeiro usuário (super_admin).
-    - Se já existirem usuários, a criação exige autenticação de um Admin ou Super Admin.
+    Endpoint interno para o auth-api criar um perfil de usuário local.
     """
-    user_count = await crud.user.get_count(db)
-
-    if user_count == 0:
-        if user_in.role != UserRole.SUPER_ADMIN:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="O primeiro usuário do sistema deve ter a role 'super_admin'.",
-            )
-        user_in.store_id = None
-    else:
-        if not current_user:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Autenticação necessária.")
-        if current_user.role not in admin_roles:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Operação não permitida.")
-        if user_in.role == UserRole.SUPER_ADMIN and current_user.role != UserRole.SUPER_ADMIN:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Apenas Super Admins podem criar outros Super Admins.")
-        if user_in.role != UserRole.SUPER_ADMIN and user_in.store_id is None:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="O campo 'store_id' é obrigatório para este tipo de usuário.")
-        if current_user.role == UserRole.ADMIN and user_in.store_id != current_user.store_id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Administradores podem criar usuários apenas para a sua própria loja.")
-
-    user = await crud.user.get_by_email(db, email=user_in.email)
+    user = await crud_user.get_by_email(db, email=user_in.email)
     if user:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Já existe um usuário com este e-mail.")
+        return user
     
-    new_user = await crud.user.create(db, obj_in=user_in, current_user=current_user) # Adicionado current_user
-    return new_user
+    # Cria um usuário básico no sistema de vendas
+    hashed_password = get_password_hash(user_in.password)
+    user_create_data = user_in.model_dump()
+    user_create_data["hashed_password"] = hashed_password
+    del user_create_data["password"] # Remove a senha em texto plano
+    
+    # Cria o usuário com os dados e senha hasheada
+    db_obj = UserModel(**user_create_data)
+    db.add(db_obj)
+    await db.commit()
+    await db.refresh(db_obj)
+    return db_obj
 
-# --- INÍCIO DA CORREÇÃO ---
-# Adiciona o endpoint '/me' para o frontend buscar os dados do usuário logado
-@router.get("/me", response_model=UserSchema)
-async def read_user_me(
-    current_user: UserModel = Depends(dependencies.get_current_active_user)
-) -> Any:
+# --- FIM DO NOVO ENDPOINT ---
+
+
+@router.get("/me", response_model=User)
+async def read_users_me(
+    current_user: User = Depends(get_current_active_user),
+):
     """
-    Obtém os dados do usuário atualmente autenticado.
+    Get current user.
     """
     return current_user
-# --- FIM DA CORREÇÃO ---
 
+@router.post("/", response_model=User, status_code=status.HTTP_201_CREATED)
+async def create_user(
+    *,
+    db: AsyncSession = Depends(get_session),
+    user_in: UserCreate,
+):
+    """
+    Create new user.
+    """
+    user = await crud_user.get_by_email(db, email=user_in.email)
+    if user:
+        raise HTTPException(
+            status_code=400,
+            detail="The user with this email already exists in the system.",
+        )
+    user = await crud_user.create(db, obj_in=user_in)
+    
+    # TODO: Sincronizar este usuário de volta para o auth-api?
+    # (Atualmente, a criação só deve acontecer pelo Hub)
+    
+    return user
 
-@router.get("/", response_model=List[UserSchema])
+@router.get("/", response_model=list[User])
 async def read_users(
-    db: AsyncSession = Depends(dependencies.get_db),
+    db: AsyncSession = Depends(get_session),
     skip: int = 0,
     limit: int = 100,
-    current_user: UserModel = Depends(dependencies.RoleChecker(admin_roles)) # <- MUDANÇA AQUI
-) -> Any:
+):
     """
-    Recupera a lista de usuários.
+    Retrieve users.
     """
-    users = await crud.user.get_multi(db, skip=skip, limit=limit, current_user=current_user) # E AQUI
+    users = await crud_user.get_multi(db, skip=skip, limit=limit)
     return users
+
+@router.get("/{user_id}", response_model=User)
+async def read_user_by_id(
+    user_id: str,
+    db: AsyncSession = Depends(get_session),
+):
+    """
+    Get a specific user by id.
+    """
+    user = await crud_user.get(db, id=user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
+
+@router.put("/{user_id}", response_model=User)
+async def update_user(
+    *,
+    db: AsyncSession = Depends(get_session),
+    user_id: str,
+    user_in: UserUpdate,
+):
+    """
+    Update a user.
+    """
+    user = await crud_user.get(db, id=user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user = await crud_user.update(db, db_obj=user, obj_in=user_in)
+    return user
+
+@router.delete("/{user_id}", response_model=User)
+async def delete_user(
+    *,
+    db: AsyncSession = Depends(get_session),
+    user_id: str,
+):
+    """
+    Delete a user.
+    """
+    user = await crud_user.get(db, id=user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user = await crud_user.remove(db, id=user_id)
+    return user

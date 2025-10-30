@@ -1,70 +1,63 @@
-# auth_api/app/core/config.py
+#
 import os
-import logging
-from pydantic_settings import BaseSettings
-from pydantic import EmailStr
-from pathlib import Path
-
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
-ENV_FILE_PATH = BASE_DIR / ".env"
+from pydantic import AnyHttpUrl, EmailStr, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from typing import List, Optional
+from loguru import logger
 
 class Settings(BaseSettings):
+    # Configuração do Pydantic para ler do .env
+    # CORRIGIDO: Adicionado extra='ignore' para Pydantic não falhar
+    model_config = SettingsConfigDict(env_file='.env', extra='ignore')
 
-    TRUSTED_DEVICE_COOKIE_NAME: str = "auth_device_id"
-    TRUSTED_DEVICE_COOKIE_MAX_AGE_DAYS: int = 30 # Tempo que o dispositivo será lembrado
-
-    # Core
-    DATABASE_URL: str
-    SECRET_KEY: str
+    # Chaves de Segurança e JWT
+    SECRET_KEY: str = "UMA_CHAVE_SECRETA_FORTE_PARA_JWT"
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
-
-    # Refresh Token
-    REFRESH_SECRET_KEY: str
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
-    # --- Configurações de Email (SendGrid) ---
-    BREVO_API_KEY: str # Substitua SENDGRID_API_KEY por esta linha
-    EMAIL_FROM: EmailStr
-    EMAIL_FROM_NAME: str | None = "Verax"
+    # Configuração do Banco de Dados
+    DATABASE_URL: str = "postgresql+psycopg2://user:password@localhost:5432/auth_db"
 
-    # Email Links
-    VERIFICATION_URL_BASE: str = "http://localhost:8000/verify"
-    EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES: int = 60
+    # Configuração do Super Usuário Inicial
+    FIRST_SUPERUSER_EMAIL: EmailStr = "admin@example.com"
+    FIRST_SUPERUSER_PASSWORD: str = "your_strong_password"
 
-    # Password Reset
-    RESET_PASSWORD_SECRET_KEY: str | None = None
-    RESET_PASSWORD_TOKEN_EXPIRE_MINUTES: int = 30
-    RESET_PASSWORD_URL_BASE: str = "http://localhost:8000/reset-password"
+    # Configuração de CORS (Cross-Origin Resource Sharing)
+    BACKEND_CORS_ORIGINS: List[AnyHttpUrl] = []
 
-    # Account Lockout
-    LOGIN_MAX_FAILED_ATTEMPTS: int = 5
-    LOGIN_LOCKOUT_MINUTES: int = 15
+    @field_validator("BACKEND_CORS_ORIGINS", mode='before')
+    def assemble_cors_origins(cls, v: str | List[str]) -> List[AnyHttpUrl] | str:
+        if isinstance(v, str) and not v.startswith("["):
+            return [i.strip() for i in v.split(",")]
+        elif isinstance(v, (list, str)):
+            return v
+        raise ValueError(v)
 
-    # Chave de API Interna
-    INTERNAL_API_KEY: str
+    # Configuração de E-mail (Opcional, para recuperação de senha, etc.)
+    SMTP_TLS: bool = True
+    SMTP_PORT: Optional[int] = None
+    SMTP_HOST: Optional[str] = None
+    SMTP_USER: Optional[str] = None
+    SMTP_PASSWORD: Optional[str] = None
+    EMAILS_FROM_EMAIL: Optional[EmailStr] = None
+    EMAILS_FROM_NAME: Optional[str] = None
 
-    # --- OIDC JWT Claims ---
-    JWT_ISSUER: str = "urn:verax:authapi"
-    JWT_AUDIENCE: str = "urn:verax:client"
+    @field_validator("EMAILS_FROM_NAME")
+    def get_project_name(cls, v: Optional[str]) -> str:
+        if not v:
+            return "VeraxAuth API"
+        return v
 
-    # --- Google OAuth2 ---
-    GOOGLE_CLIENT_ID: str | None = None
-    GOOGLE_CLIENT_SECRET: str | None = None
-    # URL do SEU frontend (para produção)
-    GOOGLE_REDIRECT_URI_FRONTEND: str = "http://localhost:3000/google-callback"
-    # URL do backend (usado apenas para testes locais da API)
-    GOOGLE_REDIRECT_URI_BACKEND: str = "http://localhost:8001/api/v1/auth/google/callback"
+    # Configuração do MFA (Autenticação de Múltiplos Fatores)
+    MFA_CHALLENGE_SECRET_KEY: str = "UMA_QUARTA_CHAVE_SECRETA_FORTE"
+    MFA_CHALLENGE_EXPIRE_MINUTES: int = 5
+    APP_NAME: str = "VeraxAuth"
 
-    class Config:
-        case_sensitive = True
-        env_file = ENV_FILE_PATH
-        env_file_encoding = 'utf-8'
-
+# --- Carregamento das Configurações ---
 try:
-    # AQUI é onde o settings é criado e exportado
     settings = Settings()
 except Exception as e:
-    logging.error(f"FATAL: Erro ao carregar 'settings' a partir do .env em {ENV_FILE_PATH}: {e}")
-    # Se der erro aqui, o 'settings' não será criado, causando o ImportError
+    # Este é o log de erro que você viu
+    logger.error(f"FATAL: Erro ao carregar 'settings' a partir do .env em {os.path.abspath('.env')}: {e}")
     raise e

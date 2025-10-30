@@ -1,93 +1,63 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
+from jose import jwt, JWTError
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
-from typing import AsyncGenerator, Optional, List 
+from app.db.session import get_session
+from app.core.config import settings
+from app.models.user import User
+from app.crud.crud_user import crud_user
+from app.schemas.token_schema import TokenPayload
 
-from app.core import security
-from app.db.session import AsyncSessionLocal
-from app.models.user import User as UserModel
-from app.schemas.enums import UserRole
+# tokenUrl agora é apenas nominal, a validação é com a SECRET_KEY
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
 
-# --- INÍCIO DA CORREÇÃO ---
-# A tokenUrl DEVE ser a rota completa que o frontend chama.
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/login/token")
-oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/api/v1/login/token", auto_error=False)
-# --- FIM DA CORREÇÃO ---
-
-
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    async with AsyncSessionLocal() as db:
-        try:
-            yield db
-        finally:
-            await db.close()
-
-# ... (o resto do ficheiro permanece exatamente como está)
 async def get_current_user(
-    db: AsyncSession = Depends(get_db), token: str = Depends(oauth2_scheme)
-) -> UserModel:
+    db: AsyncSession = Depends(get_session), token: str = Depends(oauth2_scheme)
+) -> User:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    payload = security.decode_access_token(token)
-    if payload is None:
-        raise credentials_exception
-    
-    user_id = payload.get("sub")
-    if user_id is None:
-        raise credentials_exception
-    
-    result = await db.execute(select(UserModel).filter(UserModel.id == int(user_id)))
-    user = result.scalars().first()
-
-    if user is None:
-        raise credentials_exception
+    try:
+        # CORREÇÃO: Usa a chave e algoritmo do Hub (FASE 1)
+        payload = jwt.decode(
+            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+        )
+        # O 'sub' do token é o email do usuário
+        email: str = payload.get("sub")
+        if email is None:
+            raise credentials_exception
         
+        token_data = TokenPayload(sub=email)
+
+    except (JWTError, ValidationError):
+        raise credentials_exception
+    
+    # Busca o usuário no banco de dados LOCAL do sales-api
+    user = await crud_user.get_by_email(db, email=token_data.sub)
+    
+    if user is None:
+        # Se o usuário é válido mas não existe no DB local, ele não foi sincronizado
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User profile not found in Sales system. Needs sync.",
+        )
     return user
 
 async def get_current_active_user(
-    current_user: UserModel = Depends(get_current_user),
-) -> UserModel:
+    current_user: User = Depends(get_current_user),
+) -> User:
     if not current_user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
     return current_user
 
-async def get_current_active_user_optional(
-    db: AsyncSession = Depends(get_db), token: str = Depends(oauth2_scheme_optional)
-) -> Optional[UserModel]:
-    if token is None:
-        return None
-
-    try:
-        payload = security.decode_access_token(token)
-        if payload is None:
-            return None
-        
-        user_id = payload.get("sub")
-        if user_id is None:
-            return None
-        
-        result = await db.execute(select(UserModel).filter(UserModel.id == int(user_id)))
-        user = result.scalars().first()
-
-        if user is None or not user.is_active:
-            return None
-            
-        return user
-    except Exception:
-        return None
-
-class RoleChecker:
-    def __init__(self, allowed_roles: List[UserRole]):
-        self.allowed_roles = allowed_roles
-
-    def __call__(self, user: UserModel = Depends(get_current_active_user)):
-        if user.role not in self.allowed_roles:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Operation not permitted. Required role: {' or '.join(role.value for role in self.allowed_roles)}",
-            )
-        return user
+async def get_current_active_superuser(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    if not current_user.is_superuser:
+        raise HTTPException(
+            status_code=403, detail="The user doesn't have enough privileges"
+        )
+    return current_user

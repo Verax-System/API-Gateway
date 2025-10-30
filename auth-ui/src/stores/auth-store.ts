@@ -1,91 +1,93 @@
-// src/stores/auth-store.ts
-
 import { defineStore } from 'pinia';
+import { LocalStorage, Notify } from 'quasar';
 import { api } from 'src/boot/axios';
-import type { Router } from 'vue-router';
-
-// A declaração do router para o Pinia é necessária para o logout
-declare module 'pinia' {
-  export interface PiniaCustomProperties {
-    routes: Router;
-  }
-}
-
-export interface User {
-  id: string;
-  email: string;
-  full_name: string;
-  is_active: boolean;
-  organization: {
-    id: string;
-    name: string;
-  };
-  roles: { id: number; name: string }[];
-}
+import { User, LoginCredentials } from './hub-store'; //
+import { Router } from 'vue-router'; // Importar Router
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
-    token: localStorage.getItem('token') || null,
+    token: LocalStorage.getItem('token') as string | null,
+    isAuthenticated: !!LocalStorage.getItem('token'),
     user: null as User | null,
+    router: null as Router | null, // Para guardar a instância do router
   }),
 
   getters: {
-    // A autenticação SÓ é verdadeira se tivermos o token E os dados do usuário.
-    isAuthenticated: (state) => !!state.token && !!state.user,
+    isSuperuser(state): boolean {
+      return state.user?.is_superuser ?? false;
+    },
   },
 
   actions: {
-    // A função de login AGORA retorna um booleano: sucesso ou falha.
-    async login(email: string, password: string): Promise<boolean> {
+    async login(loginData: LoginCredentials): Promise<void> {
       try {
-        const formData = new URLSearchParams();
-        formData.append('username', email);
-        formData.append('password', password);
+        const response = await api.post('/api/v1/auth/token', loginData, {
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        });
 
-        const response = await api.post('/api/v1/auth/token', formData);
         const { access_token } = response.data;
+        this.token = access_token;
+        this.isAuthenticated = true;
+        LocalStorage.set('token', access_token);
+        api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
 
-        this.setToken(access_token);
         await this.fetchUser();
 
-        // Se fetchUser não deu erro e temos um usuário, o login foi um sucesso.
-        return this.user !== null;
+        // --- INÍCIO DA CORREÇÃO DE REDIRECIONAMENTO (FASE 2) ---
+        const params = new URLSearchParams(window.location.search);
+        const redirectUrl = params.get('redirect');
+
+        if (redirectUrl) {
+          // Se houver um 'redirect' (ex: ?redirect=/fleet/)
+          // Redireciona para a URL completa
+          window.location.href = redirectUrl;
+        } else {
+          // Se não houver redirect, vai para o dashboard do Hub
+          if (this.router) {
+            this.router.push('/dashboard');
+          } else {
+            window.location.href = '/dashboard';
+          }
+        }
+        // --- FIM DA CORREÇÃO ---
+
       } catch (error) {
-        console.error('Erro no processo de login na store:', error);
-        this.clearAuthData();
-        return false;
+        this.isAuthenticated = false;
+        this.token = null;
+        this.user = null;
+        LocalStorage.remove('token');
+        delete api.defaults.headers.common['Authorization'];
+        Notify.create({
+          type: 'negative',
+          message: 'Login ou senha inválidos.',
+        });
+        throw error;
       }
     },
 
-    async fetchUser() {
+    async fetchUser(): Promise<void> {
       if (!this.token) return;
       try {
-        const response = await api.get('/api/v1/users/me');
+        const response = await api.get('/api/v1/users/me'); //
         this.user = response.data;
+        this.isAuthenticated = true;
       } catch (error) {
-        console.error('Erro ao buscar usuário (token pode ser inválido).', error);
-        // Se falhar, limpa os dados. O interceptor do axios cuidará do redirecionamento.
-        this.clearAuthData();
+        // Token pode ser inválido/expirado
+        this.logout();
       }
-    },
-
-    setToken(token: string) {
-      this.token = token;
-      localStorage.setItem('token', token);
-      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-    },
-
-    clearAuthData() {
-      this.token = null;
-      this.user = null;
-      localStorage.removeItem('token');
-      delete api.defaults.headers.common['Authorization'];
     },
 
     logout() {
-      this.clearAuthData();
-      // O único redirecionamento que a store faz é no logout explícito.
-      void this.router.push('/login');
+      this.token = null;
+      this.user = null;
+      this.isAuthenticated = false;
+      LocalStorage.remove('token');
+      delete api.defaults.headers.common['Authorization'];
+      if (this.router) {
+        this.router.push('/login');
+      } else {
+        window.location.href = '/login';
+      }
     },
   },
 });

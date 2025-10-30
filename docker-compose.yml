@@ -24,8 +24,14 @@ services:
     build: ./auth-api
     container_name: auth-api
     env_file: ./auth-api/.env
-    # Comando original do docker-compose dele
-    command: uvicorn main:app --host 0.0.0.0 --port 8001 --reload 
+    # CORRIGIDO: Aumenta o tempo de espera para 10s
+    command: >
+      sh -c "echo 'Auth-API: Aguardando o banco de dados...' && 
+             sleep 10 && 
+             echo 'Auth-API: Rodando migrações...' && 
+             alembic upgrade head && 
+             echo 'Auth-API: Iniciando servidor...' && 
+             uvicorn main:app --host 0.0.0.0 --port 8001 --reload"
     volumes:
       - ./auth-api:/app
     networks:
@@ -34,11 +40,11 @@ services:
       - auth-db
 
   auth-db:
-    image: postgres:13 #
+    image: postgres:13
     container_name: auth-db
-    env_file: ./auth-api/.env
+    env_file: ./auth-api/.env # O auth-db usa as vars daqui
     ports:
-      - "5432:5432" # Porta do DB de Autenticação
+      - "5432:5432"
     volumes:
       - auth-data:/var/lib/postgresql/data
     networks:
@@ -47,10 +53,10 @@ services:
   auth-ui:
     build: ./auth-ui
     container_name: auth-ui
-    command: npm run dev # Usaremos o script 'dev' corrigido no Passo 5
+    command: npm run dev
     volumes:
       - ./auth-ui:/app
-      - /app/node_modules # Isola node_modules
+      - /app/node_modules
     networks:
       - plataforma-network
 
@@ -59,7 +65,14 @@ services:
     build: ./sales-api
     container_name: sales-api
     env_file: ./sales-api/.env
-    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    # CORRIGIDO: Aumenta o tempo de espera para 10s
+    command: >
+      sh -c "echo 'Sales-API: Aguardando o banco de dados...' &&
+             sleep 10 &&
+             echo 'Sales-API: Rodando migrações...' &&
+             alembic upgrade head &&
+             echo 'Sales-API: Iniciando servidor...' &&
+             uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
     volumes:
       - ./sales-api:/app
     networks:
@@ -68,11 +81,11 @@ services:
       - sales-db
 
   sales-db:
-    image: postgres:15-alpine #
+    image: postgres:15-alpine
     container_name: sales-db
-    env_file: ./sales-api/.env
+    env_file: ./sales-api/.env # O sales-db usa as vars daqui
     ports:
-      - "5433:5432" # Porta do DB de Vendas
+      - "5433:5432"
     volumes:
       - sales-data:/var/lib/postgresql/data
     networks:
@@ -81,7 +94,7 @@ services:
   sales-ui:
     build: ./sales-ui
     container_name: sales-ui
-    command: npm run dev # Usaremos o script 'dev' corrigido no Passo 5
+    command: npm run dev
     volumes:
       - ./sales-ui:/app
       - /app/node_modules
@@ -93,10 +106,17 @@ services:
     build: ./fleet-api
     container_name: fleet-api
     env_file: ./fleet-api/.env
-    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    # CORRIGIDO: Aumenta o tempo de espera e corrige comando alembic
+    command: >
+      sh -c "echo 'Fleet-API: Aguardando o banco de dados...' &&
+             sleep 10 &&
+             echo 'Fleet-API: Rodando migrações...' &&
+             alembic -c alembic.ini upgrade head &&
+             echo 'Fleet-API: Iniciando servidor...' &&
+             uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
     volumes:
       - ./fleet-api:/app
-      - ./fleet-api/static/uploads:/app/static/uploads # Persiste uploads
+      - ./fleet-api/static/uploads:/app/static/uploads
     networks:
       - plataforma-network
     depends_on:
@@ -105,9 +125,9 @@ services:
   fleet-db:
     image: postgres:15-alpine
     container_name: fleet-db
-    env_file: ./fleet-api/.env
+    env_file: ./fleet-api/.env # O fleet-db usa as vars daqui
     ports:
-      - "5434:5432" # Porta do DB de Frota
+      - "5434:5432"
     volumes:
       - fleet-data:/var/lib/postgresql/data
     networks:
@@ -116,19 +136,17 @@ services:
   fleet-ui:
     build: ./fleet-ui
     container_name: fleet-ui
-    command: npm run dev # Usaremos o script 'dev' corrigido no Passo 5
+    command: npm run dev
     volumes:
       - ./fleet-ui:/app
       - /app/node_modules
     networks:
       - plataforma-network
 
-# Rede única para todos os serviços conversarem
 networks:
   plataforma-network:
     driver: bridge
 
-# Volumes para persistir os dados dos bancos
 volumes:
   auth-data:
   sales-data:

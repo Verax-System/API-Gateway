@@ -1,65 +1,67 @@
-import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import ApiService from '../api/ApiService'; // Apenas a importação padrão é necessária agora
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import ApiService from '../api/ApiService';
+import { jwtDecode } from 'jwt-decode';
 
-const AuthContext = createContext(null);
+const AuthContext = createContext();
+
+export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const navigate = useNavigate();
-
-  const logout = useCallback(() => {
-    setUser(null);
-    localStorage.removeItem('accessToken');
-    // Limpa o cabeçalho de autorização para futuras requisições
-    delete ApiService.defaults?.headers?.common['Authorization'];
-    navigate('/login');
-  }, [navigate]);
-
-  const fetchAndSetUser = useCallback(async () => {
-    try {
-      const response = await ApiService.getCurrentUser();
-      setUser(response.data);
-      return response.data;
-    } catch (error) {
-      console.error("Falha ao buscar dados do usuário, sessão encerrada.", error);
-      logout();
-      return null;
-    }
-  }, [logout]);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const initializeAuth = async () => {
-      const token = localStorage.getItem('accessToken');
+    // Esta função é chamada quando o AuthProvider é montado
+    const loadUserFromToken = async () => {
+      const token = localStorage.getItem('token');
+      
       if (token) {
-        await fetchAndSetUser();
-      }
-      setLoading(false);
-    };
-    initializeAuth();
-  }, [fetchAndSetUser]);
+        try {
+          const decodedToken = jwtDecode(token);
+          const currentTime = Date.now() / 1000;
 
-  const login = async (email, password) => {
-    // Usa a função de login do ApiService
-    const response = await ApiService.login(email, password);
-    const { access_token } = response.data;
-    localStorage.setItem('accessToken', access_token);
-    
-    const userData = await fetchAndSetUser();
-    return userData;
+          if (decodedToken.exp > currentTime) {
+            // Token é válido e não expirado
+            ApiService.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+            
+            // CORREÇÃO: Buscamos o usuário no /users/me do sales-api
+            const response = await ApiService.get('/users/me'); //
+            setUser(response.data);
+            setIsAuthenticated(true);
+          } else {
+            // Token expirado
+            logout();
+          }
+        } catch (error) {
+          console.error("Falha ao carregar usuário do token", error);
+          if (error.response && error.response.status === 404) {
+            // O token é válido, mas o usuário não foi sincronizado
+            console.error("Usuário não sincronizado. Redirecionando para logout.");
+          }
+          logout(); // Token inválido ou usuário não encontrado
+        }
+      }
+      setIsLoading(false);
+    };
+
+    loadUserFromToken();
+  }, []);
+
+  // Funções de login e registro foram REMOVIDAS
+
+  const logout = () => {
+    setUser(null);
+    setIsAuthenticated(false);
+    localStorage.removeItem('token');
+    delete ApiService.defaults.headers.common['Authorization'];
+    // Redireciona para o Hub Central ao deslogar
+    window.location.href = 'http://localhost/login';
   };
 
-  if (loading) {
-    // Pode adicionar um componente de Spinner/Loading aqui
-    return <div>Carregando sistema...</div>;
-  }
-
   return (
-    <AuthContext.Provider value={{ user, login, logout, isAuthenticated: !!user }}>
-      {children}
+    <AuthContext.Provider value={{ user, isAuthenticated, isLoading, logout }}>
+      {!isLoading && children}
     </AuthContext.Provider>
   );
 };
-
-export const useAuth = () => useContext(AuthContext);

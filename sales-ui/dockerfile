@@ -12,5 +12,3 @@ RUN npm install
 
 # Copia todo o resto do código do frontend
 COPY . .
-
-# O comando para iniciar (npm run dev) já está no seu docker-compose.yml

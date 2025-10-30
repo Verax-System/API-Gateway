@@ -15,5 +15,3 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copia todo o resto do código da aplicação
 COPY . .
-
-# O comando para iniciar a aplicação (uvicorn) já está no seu docker-compose.yml

@@ -1,0 +1,40 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light;
+  color: #213547;
+  background-color: #ffffff;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* O código problemático foi removido daqui. */
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #f0f2f5; /* Um fundo mais suave para a aplicação */
+}
+
+/* Garante que o contêiner do React ocupe toda a altura */
+#root {
+  height: 100vh;
+  display: flex;
+}
+.ant-menu-dark.ant-menu-inline .ant-menu-item-divider {
+    border-top-color: #374151; /* Este é o 'gray-700' do Tailwind */
+    margin-top: 4px;
+    margin-bottom: 4px;
+}
+.ant-menu-dark.ant-menu-inline .ant-menu-item-group-title {
+    font-weight: 700; /* 700 é o valor para "bold" (negrito) */
+    color: #c6ced8;   /* Um cinza um pouco mais claro para destacar */
+}

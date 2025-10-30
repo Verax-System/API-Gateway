@@ -4,6 +4,12 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, APIKeyHeader, HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import AsyncGenerator
+from app.models.user import User
+from jose import jwt, JWTError
+from pydantic import ValidationError
+
+from app.crud.crud_user import user as crud_user
+from app.schemas.token import TokenPayload
 import secrets # Importar secrets para comparação segura
 
 # Remover import do logger
@@ -11,10 +17,13 @@ import secrets # Importar secrets para comparação segura
 
 from app.core import security
 # --- CORRECTION HERE: Remove AsyncSessionLocal import ---
-from app.db.session import get_db # Keep get_db import
+from app.db.session import get_db  # <--- CORREÇÃO
 # --- END CORRECTION ---
 from app.models.user import User as UserModel
-from app.crud.crud_user import user as crud_user
+# --- CORREÇÃO (IMPORTAÇÃO CIRCULAR) ---
+# REMOVIDO: from app.crud.crud_user import user as crud_user
+# Esta importação será movida para dentro da função 'get_current_user_from_token'
+# --- FIM DA CORREÇÃO ---
 from app.core.config import settings # Importar settings
 
 # Define oauth2_scheme (ISTO SERÁ USADO APENAS PELO ENDPOINT /token)
@@ -32,6 +41,48 @@ bearer_scheme = HTTPBearer(
 api_key_scheme = APIKeyHeader(name="X-API-Key", description="Chave de API para endpoints /mgmt")
 # --- FIM DEPENDÊNCIA ---
 
+async def get_current_user(
+    db: AsyncSession = Depends(get_db), token: str = Depends(oauth2_scheme) # <-- CORREÇÃO: Usando get_db
+) -> User:
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        # CORREÇÃO: Usa a chave e algoritmo do Hub (FASE 1)
+        payload = jwt.decode(
+            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+        )
+        # O 'sub' do token é o email do usuário
+        email: str = payload.get("sub")
+        if email is None:
+            raise credentials_exception
+        
+        token_data = TokenPayload(sub=email)
+
+    except (JWTError, ValidationError):
+        raise credentials_exception
+    
+    # Busca o usuário no banco de dados LOCAL do sales-api
+    user = await crud_user.get_by_email(db, email=token_data.sub)
+    
+    if user is None:
+        # Se o usuário é válido mas não existe no DB local, ele não foi sincronizado
+        raise HTTPException(
+            status_code=status.HTTP_44_NOT_FOUND, # Erro 404
+            detail="User profile not found in Sales system. Needs sync.",
+        )
+    return user
+
+async def get_current_active_superuser(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    if not current_user.is_superuser:
+        raise HTTPException(
+            status_code=403, detail="The user doesn't have enough privileges"
+        )
+    return current_user
 
 # --- get_current_user logic (MODIFICADA) ---
 async def get_current_user_from_token(
@@ -39,6 +90,12 @@ async def get_current_user_from_token(
     # MODIFICADO: Trocar de Depends(oauth2_scheme) para Depends(bearer_scheme)
     creds: HTTPAuthorizationCredentials = Depends(bearer_scheme)
 ) -> UserModel:
+    
+    # --- CORREÇÃO (IMPORTAÇÃO CIRCULAR) ---
+    # A importação do crud_user foi movida para aqui para quebrar o loop
+    from app.crud.crud_user import user as crud_user
+    # --- FIM DA CORREÇÃO ---
+
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -79,6 +136,9 @@ async def get_current_user_from_token(
         raise credentials_exception
     return user
 
+
+
+# ELA ESTÁ AQUI E SEMPRE ESTEVE! O ERRO É CAUSADO PELO LOOP ACIMA.
 async def get_current_active_user(
     current_user: UserModel = Depends(get_current_user_from_token),
 ) -> UserModel:

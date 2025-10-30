@@ -1,8 +1,11 @@
-import httpx # ADICIONADO
+import httpx 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.api.dependencies import get_session, get_current_active_superuser
-from app.crud.crud_user import crud_user
+# CORREÇÃO: Importação de 'get_current_active_superuser' está CORRETA.
+from app.api.dependencies import get_current_active_superuser
+from app.crud.crud_user import user as crud_user
+# CORREÇÃO: Importar 'get_db' do local correto (session.py)
+from app.db.session import get_db
 from app.schemas.user import User, UserCreate, UserUpdate
 from app.models.user import User as UserModel
 
@@ -11,7 +14,8 @@ router = APIRouter()
 @router.post("/admin/users/", response_model=User, status_code=status.HTTP_201_CREATED)
 async def admin_create_user(
     *,
-    db: AsyncSession = Depends(get_session),
+    # CORREÇÃO: Alterado de get_session para get_db
+    db: AsyncSession = Depends(get_db),
     user_in: UserCreate,
     current_user: UserModel = Depends(get_current_active_superuser),
 ):
@@ -65,7 +69,8 @@ async def admin_create_user(
 
 @router.get("/admin/users/", response_model=list[User])
 async def admin_read_users(
-    db: AsyncSession = Depends(get_session),
+    # CORREÇÃO: Alterado de get_session para get_db
+    db: AsyncSession = Depends(get_db),
     skip: int = 0,
     limit: int = 100,
     current_user: UserModel = Depends(get_current_active_superuser),
@@ -79,7 +84,8 @@ async def admin_read_users(
 @router.get("/admin/users/{user_id}", response_model=User)
 async def admin_read_user(
     user_id: int,
-    db: AsyncSession = Depends(get_session),
+    # CORREÇÃO: Alterado de get_session para get_db
+    db: AsyncSession = Depends(get_db),
     current_user: UserModel = Depends(get_current_active_superuser),
 ):
     """
@@ -94,7 +100,8 @@ async def admin_read_user(
 async def admin_update_user(
     user_id: int,
     user_in: UserUpdate,
-    db: AsyncSession = Depends(get_session),
+    # CORREÇÃO: Alterado de get_session para get_db
+    db: AsyncSession = Depends(get_db),
     current_user: UserModel = Depends(get_current_active_superuser),
 ):
     """
@@ -113,7 +120,8 @@ async def admin_update_user(
 @router.delete("/admin/users/{user_id}", response_model=User)
 async def admin_delete_user(
     user_id: int,
-    db: AsyncSession = Depends(get_session),
+    # CORREÇÃO: Alterado de get_session para get_db
+    db: AsyncSession = Depends(get_db),
     current_user: UserModel = Depends(get_current_active_superuser),
 ):
     """

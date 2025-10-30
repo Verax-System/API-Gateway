@@ -1,12 +1,10 @@
-version: '3.8'
-
 services:
   # 1. API GATEWAY (O PONTO DE ENTRADA ÚNICO)
   gateway:
     image: nginx:1.25-alpine
     container_name: api-gateway
     ports:
-      - "80:80" # ÚNICA porta exposta para seu PC: http://localhost
+      - "8000:80" # <-- CORRIGIDO: Acessar via http://localhost:8000
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf
     networks:
@@ -24,14 +22,13 @@ services:
     build: ./auth-api
     container_name: auth-api
     env_file: ./auth-api/.env
-    # CORRIGIDO: Aumenta o tempo de espera para 10s
     command: >
       sh -c "echo 'Auth-API: Aguardando o banco de dados...' && 
              sleep 10 && 
              echo 'Auth-API: Rodando migrações...' && 
              alembic upgrade head && 
              echo 'Auth-API: Iniciando servidor...' && 
-             uvicorn main:app --host 0.0.0.0 --port 8001 --reload"
+             uvicorn main:app --host 0.0.0.0 --port 8001 --reload" # <-- CORRIGIDO: Porta 8001
     volumes:
       - ./auth-api:/app
     networks:
@@ -40,13 +37,17 @@ services:
       - auth-db
 
   auth-db:
-    image: postgres:13
+    image: postgres:15-alpine
     container_name: auth-db
-    env_file: ./auth-api/.env # O auth-db usa as vars daqui
-    ports:
-      - "5432:5432"
     volumes:
-      - auth-data:/var/lib/postgresql/data
+      - postgres_auth_data:/var/lib/postgresql/data
+    ports:
+      - "5434:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=Admin123
+      - POSTGRES_DB=auth # <-- CORRIGIDO: Cria o banco 'auth'
+    restart: unless-stopped
     networks:
       - plataforma-network
 
@@ -65,14 +66,13 @@ services:
     build: ./sales-api
     container_name: sales-api
     env_file: ./sales-api/.env
-    # CORRIGIDO: Aumenta o tempo de espera para 10s
     command: >
       sh -c "echo 'Sales-API: Aguardando o banco de dados...' &&
              sleep 10 &&
              echo 'Sales-API: Rodando migrações...' &&
              alembic upgrade head &&
              echo 'Sales-API: Iniciando servidor...' &&
-             uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
+             uvicorn main:app --host 0.0.0.0 --port 8002 --reload" # <-- CORRIGIDO: Porta 8002
     volumes:
       - ./sales-api:/app
     networks:
@@ -83,11 +83,15 @@ services:
   sales-db:
     image: postgres:15-alpine
     container_name: sales-db
-    env_file: ./sales-api/.env # O sales-db usa as vars daqui
+    volumes:
+      - postgres_sales_data:/var/lib/postgresql/data
     ports:
       - "5433:5432"
-    volumes:
-      - sales-data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=Admin123
+      - POSTGRES_DB=sales # <-- CORRIGIDO: Cria o banco 'sales'
+    restart: unless-stopped
     networks:
       - plataforma-network
 
@@ -106,14 +110,13 @@ services:
     build: ./fleet-api
     container_name: fleet-api
     env_file: ./fleet-api/.env
-    # CORRIGIDO: Aumenta o tempo de espera e corrige comando alembic
     command: >
       sh -c "echo 'Fleet-API: Aguardando o banco de dados...' &&
              sleep 10 &&
              echo 'Fleet-API: Rodando migrações...' &&
-             alembic -c alembic.ini upgrade head &&
+             alembic upgrade head &&
              echo 'Fleet-API: Iniciando servidor...' &&
-             uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
+             uvicorn main:app --host 0.0.0.0 --port 8003 --reload" # <-- CORRIGIDO: Porta 8003
     volumes:
       - ./fleet-api:/app
       - ./fleet-api/static/uploads:/app/static/uploads
@@ -125,9 +128,9 @@ services:
   fleet-db:
     image: postgres:15-alpine
     container_name: fleet-db
-    env_file: ./fleet-api/.env # O fleet-db usa as vars daqui
+    env_file: ./fleet-api/.env # O fleet-db usa as vars daqui (POSTGRES_DB=frota_agil)
     ports:
-      - "5434:5432"
+      - "5435:5432" # <-- CORRIGIDO: Evita conflito com a porta 5434
     volumes:
       - fleet-data:/var/lib/postgresql/data
     networks:
@@ -148,6 +151,7 @@ networks:
     driver: bridge
 
 volumes:
-  auth-data:
-  sales-data:
+  postgres_data: # <-- CORRIGIDO: Faltava este
+  postgres_sales_data:
+  postgres_auth_data:
   fleet-data:

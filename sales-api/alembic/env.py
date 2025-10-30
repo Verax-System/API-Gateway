@@ -52,13 +52,12 @@ async def run_migrations_online() -> None:
     """
     # Usa a configuração do alembic.ini (agora corrigida com a DATABASE_URL)
     connectable = AsyncEngine(
-        engine_from_config(
-            config.get_section(config.main_section, {}),
-            prefix="sqlalchemy.",
-            poolclass=pool.NullPool,
-            future=True,
-        )
+    engine_from_config(
+        config.get_section('alembic', {}), # <-- CORREÇÃO
+        prefix="sqlalchemy.",
+        #...
     )
+)
 
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)

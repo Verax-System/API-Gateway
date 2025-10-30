@@ -1,4 +1,4 @@
-# erax System - Plataforma de Gerenciamento (API Gateway)
+# Verax System - Plataforma de Gerenciamento (API Gateway)
 
 Este projeto implementa uma arquitetura de microsserviços completa, orquestrada com Docker Compose e gerenciada por um API Gateway (Nginx). A plataforma é dividida em três domínios principais: Autenticação (auth), Vendas (sales) e Gerenciamento de Frotas (fleet).
 

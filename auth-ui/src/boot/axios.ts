@@ -1,7 +1,9 @@
+// auth-ui/src/boot/axios.ts
+
 import { boot } from 'quasar/wrappers';
 import axios, { AxiosInstance } from 'axios';
 import { useAuthStore } from 'src/stores/auth-store';
-import { LocalStorage } from 'quasar'; // Importado para pegar o token inicial
+import { LocalStorage, Notify } from 'quasar'; 
 
 declare module '@vue/runtime-core' {
   interface ComponentCustomProperties {
@@ -9,18 +11,16 @@ declare module '@vue/runtime-core' {
   }
 }
 
-// CORRIGIDO: baseURL vazia, pois os stores já usam o caminho completo (ex: /api/v1/auth/token)
 const api = axios.create({
   baseURL: '',
 });
 
 export default boot(({ app, router }) => {
-  // Use 'pinia' para obter a store fora de um componente
   const authStore = useAuthStore(); 
 
   api.interceptors.request.use((config) => {
-    // Tenta pegar o token da store, se não, do LocalStorage
-    const token = authStore.token || LocalStorage.getItem('token');
+    // Busca o token da store, se não, do LocalStorage (necessário no primeiro boot/reload)
+    const token = authStore.token || LocalStorage.getItem('token'); 
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -30,17 +30,28 @@ export default boot(({ app, router }) => {
   api.interceptors.response.use(
     (response) => response,
     (error) => {
-      if (error.response && error.response.status === 401) {
-        authStore.logout();
-        // Recarrega a página para o estado de login
-        window.location.href = '/login';
+      if (error.response) {
+          // Trata Erro de Não Autorizado
+          if (error.response.status === 401) {
+            authStore.logout();
+            // Redireciona via window.location para limpar o estado e recarregar
+            window.location.href = '/login'; 
+          }
+          // NOVO: Trata Erro de Proibido (Permissão)
+          if (error.response.status === 403) {
+             Notify.create({ 
+                 type: 'negative', 
+                 message: 'Acesso Proibido. Você não tem permissão para esta ação.' 
+             });
+             // Opcional: Redirecionar para uma página de erro 403/proibido.
+             // Se houver uma página /unauthorized, use `router.push('/unauthorized')`
+          }
       }
       return Promise.reject(error);
     }
   );
 
   app.config.globalProperties.$api = api;
-  // Disponibiliza o router para a store de auth
   authStore.router = router;
 });
 

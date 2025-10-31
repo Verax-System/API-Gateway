@@ -1,18 +1,55 @@
 from typing import Any, List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 # --- IMPORTAR A NOVA DEPENDÊNCIA DE ADMIN ---
 from app.api.dependencies import get_current_active_user, get_current_admin_user
 # --- FIM IMPORTAÇÃO ---
 from app.crud.crud_user import crud_user
 from app.db.session import get_db
-from app.schemas.user import User as UserSchema, UserCreate, UserUpdate
+from app.schemas.user import User as UserSchema, UserCreate, UserUpdate, EmailRequest # Importado EmailRequest
 # Importar dependência de autenticação do módulo auth
 from app.models.user import User as UserModel
 from app.services.email_service import send_verification_email # Importar serviço de email
-from fastapi import BackgroundTasks # Importar BackgroundTasks
+from fastapi import BackgroundTasks # Importar BackgroundTasks~
+from loguru import logger
 
 router = APIRouter()
+
+@router.post("/resend-verification", status_code=status.HTTP_202_ACCEPTED)
+async def resend_verification_email(
+    *,
+    db: AsyncSession = Depends(get_db),
+    request_body: EmailRequest,
+    background_tasks: BackgroundTasks
+):
+    user = await crud_user.get_by_email(db, email=request_body.email)
+    
+    # NOVO LOG: Verifica se o usuário foi encontrado e qual é o status dele
+    if user:
+        logger.info(f"User found for resend verification. Active: {user.is_active}, Verified: {user.is_verified}")
+    else:
+        logger.info(f"User not found for resend verification.")
+        
+    # Verifica se o usuário existe, está ativo e NÃO está verificado
+    if user and user.is_active and not user.is_verified:
+        try:
+            # Esta função (generate_verification_token) agora deve funcionar (após a correção no crud_user.py)
+            db_user, verification_token = await crud_user.generate_verification_token(db, user=user)
+            
+            # Envia o e-mail em segundo plano
+            background_tasks.add_task(
+                send_verification_email, 
+                email_to=db_user.email, 
+                verification_token=verification_token
+            )
+            logger.info(f"Background task added for email resend to: {user.email}")
+            
+        except Exception as e:
+            # Log de erro interno no background task.
+            logger.error(f"FATAL ERROR in background task during email resend for {user.email}: {e}")
+            pass 
+            
+    return {"msg": "Se o e-mail existir e não estiver verificado, um novo link foi enviado."}
 
 @router.post("/", response_model=UserSchema, status_code=status.HTTP_201_CREATED)
 async def create_user(

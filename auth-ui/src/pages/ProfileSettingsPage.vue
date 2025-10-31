@@ -1,90 +1,189 @@
 <template>
-  <q-card flat bordered>
-    <q-card-section>
-      <div class="text-h6 text-primary">Detalhes do Meu Perfil</div>
-      <div class="text-subtitle2 text-grey">Atualize seu nome, e-mail e senha.</div>
-    </q-card-section>
+  <q-page class="q-pa-md">
+    <div class="text-h6 q-mb-md">Informações do Perfil</div>
 
-    <q-separator />
+    <q-card flat bordered class="q-mb-lg">
+      <q-card-section>
+        <div class="text-subtitle1 text-primary">Atualizar Nome e Email</div>
+      </q-card-section>
+      
+      <q-card-section class="q-pt-none">
+        <q-form @submit="updateBasicInfo">
+          <q-input
+            v-model="fullName"
+            label="Nome Completo"
+            :hint="`Atual: ${authStore.user?.full_name}`"
+            outlined
+            dense
+            class="q-mb-md"
+            :rules="[val => !!val || 'O nome é obrigatório']"
+          />
+          <q-input
+            v-model="email"
+            label="E-mail"
+            :hint="`Atual: ${authStore.user?.email}`"
+            type="email"
+            outlined
+            dense
+            class="q-mb-md"
+            :rules="[
+              val => !!val || 'O e-mail é obrigatório', 
+              val => /.+@.+\..+/.test(val) || 'E-mail inválido'
+            ]"
+          />
+          
+          <q-btn
+            type="submit"
+            label="Salvar Alterações"
+            color="primary"
+            :loading="loadingInfo"
+            no-caps
+            class="q-mt-md"
+          />
+        </q-form>
+      </q-card-section>
+    </q-card>
 
-    <q-card-section class="q-gutter-md">
-      <q-form @submit="handleUpdateProfile" class="q-gutter-md">
-        
-        <q-input
-          v-model="fullName"
-          label="Nome Completo"
-          outlined
-        />
-        
-        <q-input
-          v-model="email"
-          label="E-mail"
-          type="email"
-          outlined
-          hint="Para alterar o e-mail, você precisará reconfirmar o novo endereço."
-        />
-        
-        <q-separator />
-        
-        <div class="text-h6 q-mt-lg">Alterar Senha</div>
-        <q-input
-          v-model="oldPassword"
-          label="Senha Atual"
-          type="password"
-          outlined
-        />
-        <q-input
-          v-model="newPassword"
-          label="Nova Senha"
-          type="password"
-          outlined
-        />
-        <q-input
-          v-model="confirmNewPassword"
-          label="Confirmar Nova Senha"
-          type="password"
-          outlined
-        />
-        
-        <q-btn type="submit" label="Salvar Alterações" color="primary" :loading="loading" unelevated />
-      </q-form>
-    </q-card-section>
-  </q-card>
+    <q-card flat bordered>
+      <q-card-section>
+        <div class="text-subtitle1 text-primary">Alterar Senha</div>
+      </q-card-section>
+      
+      <q-card-section class="q-pt-none">
+        <q-form @submit="updatePassword">
+          <q-input
+            v-model="currentPassword"
+            type="password"
+            label="Senha Atual"
+            outlined
+            dense
+            class="q-mb-md"
+            :rules="[val => !!val || 'Senha atual é obrigatória']"
+          />
+          <q-input
+            v-model="newPassword"
+            type="password"
+            label="Nova Senha"
+            outlined
+            dense
+            class="q-mb-md"
+            :rules="[
+              val => !!val || 'Nova senha é obrigatória', 
+              val => val.length >= 8 || 'Mínimo de 8 caracteres'
+            ]"
+          />
+          <q-input
+            v-model="confirmPassword"
+            type="password"
+            label="Confirmar Nova Senha"
+            outlined
+            dense
+            class="q-mb-md"
+            :rules="[
+              val => !!val || 'Confirmação é obrigatória',
+              val => val === newPassword || 'As senhas não coincidem'
+            ]"
+          />
+          
+          <q-btn
+            type="submit"
+            label="Alterar Senha"
+            color="primary"
+            :loading="loadingPassword"
+            no-caps
+            class="q-mt-md"
+          />
+        </q-form>
+      </q-card-section>
+    </q-card>
+  </q-page>
 </template>
 
-<script setup lang="ts">
-import { ref, watch } from 'vue';
-import { useAuthStore } from 'stores/auth-store';
-import { useQuasar } from 'quasar';
+<script lang="ts">
+import { defineComponent, ref, watch } from 'vue';
+import { useAuthStore } from 'src/stores/auth-store';
+import { Notify } from 'quasar';
 
-const authStore = useAuthStore();
-const $q = useQuasar();
+export default defineComponent({
+  name: 'ProfileSettingsPage',
+  setup() {
+    const authStore = useAuthStore();
+    
+    // --- Dados de Informações Básicas ---
+    const fullName = ref(authStore.user?.full_name || '');
+    const email = ref(authStore.user?.email || '');
+    const loadingInfo = ref(false);
 
-const loading = ref(false);
-
-const fullName = ref(authStore.user?.full_name || '');
-const email = ref(authStore.user?.email || '');
-const oldPassword = ref('');
-const newPassword = ref('');
-const confirmNewPassword = ref('');
-
-// Sincronizar dados iniciais do store
-watch(() => authStore.user, (user) => {
-    if (user) {
-        fullName.value = user.full_name;
-        email.value = user.email;
-    }
-}, { immediate: true });
+    // Garante que os campos são populados se o usuário for carregado mais tarde (após reload)
+    watch(() => authStore.user, (newUser) => {
+      if (newUser) {
+        fullName.value = newUser.full_name;
+        email.value = newUser.email;
+      }
+    }, { immediate: true });
 
 
-async function handleUpdateProfile() {
-  if (loading.value) return;
-  loading.value = true;
+    const updateBasicInfo = async () => {
+        loadingInfo.value = true;
+        try {
+            await authStore.updateUserProfile({
+                full_name: fullName.value,
+                email: email.value,
+            });
+            // O store já envia o Notify de sucesso
+        } catch (error: any) {
+            Notify.create({
+                type: 'negative',
+                message: error.response?.data?.detail || 'Falha ao atualizar informações.',
+            });
+        } finally {
+            loadingInfo.value = false;
+        }
+    };
+    
+    // --- Dados de Senha ---
+    const currentPassword = ref('');
+    const newPassword = ref('');
+    const confirmPassword = ref('');
+    const loadingPassword = ref(false);
 
-  // Implementação de validação e chamada de API aqui
-  // Exemplo: await authStore.updateUserProfile({ full_name: fullName.value, ... });
+    const updatePassword = async () => {
+        if (newPassword.value !== confirmPassword.value) return; // Regra de validação no campo
 
-  $q.notify({ type: 'positive', message: 'Perfil atualizado com sucesso! (Simulado)' });
-  loading.value = false;
-}
+        loadingPassword.value = true;
+        try {
+            await authStore.updateUserProfile({
+                current_password: currentPassword.value,
+                new_password: newPassword.value,
+            });
+            // Limpa os campos após o sucesso
+            currentPassword.value = '';
+            newPassword.value = '';
+            confirmPassword.value = '';
+            // O store já envia o Notify de sucesso
+        } catch (error: any) {
+             Notify.create({
+                type: 'negative',
+                message: error.response?.data?.detail || 'Falha ao alterar senha. Verifique a senha atual.',
+            });
+        } finally {
+            loadingPassword.value = false;
+        }
+    };
+
+    return {
+      authStore,
+      fullName,
+      email,
+      loadingInfo,
+      updateBasicInfo,
+      
+      currentPassword,
+      newPassword,
+      confirmPassword,
+      loadingPassword,
+      updatePassword,
+    };
+  },
+});
 </script>

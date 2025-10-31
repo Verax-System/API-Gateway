@@ -4,4 +4,7 @@ __pycache__/
 *\__pycache__
 *.__pycache__
 .env
+env
 *.pyc
+auth-ui/.env
+sales-api/.env

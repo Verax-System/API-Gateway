@@ -326,7 +326,7 @@ async def enable_mfa_start(
     except Exception as e:
         logger.error(f"Erro ao salvar segredo OTP pendente para {current_user.email}: {e}")
         raise HTTPException(status_code=500, detail="Erro ao iniciar habilitação do MFA.")
-    otp_uri = security.generate_otp_uri(secret=otp_secret, email=current_user.email, issuer_name=settings.EMAIL_FROM_NAME or "Verax Auth")
+    otp_uri = security.generate_otp_uri(secret=otp_secret, email=current_user.email, issuer_name=settings.EMAILS_FROM_NAME or "Verax Auth")
     try: qr_code_base64 = security.generate_qr_code_base64(otp_uri)
     except Exception as e:
         logger.error(f"Erro ao gerar QR code para {current_user.email}: {e}")

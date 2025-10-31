@@ -1,7 +1,9 @@
+// auth-ui/src/stores/auth-store.ts
+
 import { defineStore } from 'pinia';
 import { LocalStorage, Notify } from 'quasar';
 import { api } from 'src/boot/axios';
-import type { Router } from 'vue-router'; // Importar Router
+import type { Router } from 'vue-router';
 
 // --- MODELOS ESSENCIAIS DEFINIDOS LOCALMENTE PARA EVITAR DEPENDÊNCIAS CIRCULARES ---
 
@@ -33,22 +35,36 @@ export interface ProfileUpdateData {
   new_password?: string;
 }
 
+// Resposta de MFA Start
+export interface MFAEnrollmentResponse {
+    secret: string;
+    qr_code_base64: string; // O backend retornou base64
+}
+
+// Resposta de MFA Confirm
+export interface MFAConfirmResponse {
+    user: UserProfile;
+    recovery_codes: string[];
+}
+
+
 // --- FIM MODELOS ESSENCIAIS ---
 
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
     token: LocalStorage.getItem('token') as string | null,
+    // NOVO: Adiciona refresh_token ao estado e LocalStorage
+    refreshToken: LocalStorage.getItem('refresh_token') as string | null,
     isAuthenticated: !!LocalStorage.getItem('token'),
-    user: null as UserProfile | null, // Usando a nova interface UserProfile
-    router: null as Router | null, // Para guardar a instância do router
+    user: null as UserProfile | null,
+    router: null as Router | null,
   }),
 
   getters: {
     isSuperuser(state): boolean {
       return state.user?.is_superuser ?? false;
     },
-    // Getter para verificar se a API de segurança está sendo chamada de forma correta
     isLoggedIn(state): boolean {
       return state.isAuthenticated && !!state.token;
     }
@@ -66,39 +82,41 @@ export const useAuthStore = defineStore('auth', {
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         });
 
-        const { access_token } = response.data;
+        // CORREÇÃO: Captura ambos os tokens
+        const { access_token, refresh_token } = response.data;
+        
         this.token = access_token;
+        this.refreshToken = refresh_token;
         this.isAuthenticated = true;
+        
         LocalStorage.set('token', access_token);
+        // SALVA O REFRESH TOKEN
+        LocalStorage.set('refresh_token', refresh_token);
+        
         api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
 
         await this.fetchUser();
 
-        // --- CORREÇÃO DE REDIRECIONAMENTO (Usando o prefixo /hub/) ---
         const urlParams = new URLSearchParams(window.location.search);
         const redirectUrl = urlParams.get('redirect');
 
         if (redirectUrl) {
-          // Se houver um 'redirect' (ex: ?redirect=/fleet/), redireciona para a URL completa
           window.location.href = redirectUrl;
         } else {
-          // Se não houver redirect, vai para o dashboard do Hub
           if (this.router) {
-            // CORRIGIDO: Redireciona para a rota correta do Pinia/Vue Router
             void this.router.push({ path: '/hub/dashboard' }); 
           } else {
-            // Fallback para hard redirect
             window.location.href = '/hub/dashboard';
           }
         }
-        // --- FIM DA CORREÇÃO ---
-
         return true; 
       } catch (error) {
         this.isAuthenticated = false;
         this.token = null;
+        this.refreshToken = null; // Limpa o refresh token em caso de falha
         this.user = null;
         LocalStorage.remove('token');
+        LocalStorage.remove('refresh_token'); // Limpa o refresh token
         delete api.defaults.headers.common['Authorization'];
         Notify.create({
           type: 'negative',
@@ -119,13 +137,28 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
-    logout() {
+    async logout() {
+      const refreshToken = this.refreshToken || LocalStorage.getItem('refresh_token');
+      
+      // CHAMA O ENDPOINT DE LOGOUT NA API PARA REVOGAR O REFRESH TOKEN
+      if (refreshToken) {
+        try {
+          await api.post('/api/v1/auth/logout', { refresh_token: refreshToken });
+        } catch (error) {
+          console.warn('Falha ao encerrar sessão no servidor, prosseguindo com logout local.', error);
+          // Continua o logoff local mesmo se o servidor falhar
+        }
+      }
+
+      // Limpeza local COMPLETA
       this.token = null;
+      this.refreshToken = null;
       this.user = null;
       this.isAuthenticated = false;
       LocalStorage.remove('token');
+      LocalStorage.remove('refresh_token');
       delete api.defaults.headers.common['Authorization'];
-      // CORRIGIDO: Garante que o redirecionamento é para a página de login raiz
+      
       if (this.router) {
         void this.router.push('/login');
       } else {
@@ -133,55 +166,99 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
+    async forgotPassword(email: string): Promise<void> {
+      await api.post('/api/v1/auth/forgot-password', { email });
+      Notify.create({
+        type: 'positive',
+        message: 'Se o email estiver registrado, um link para redefinição de senha foi enviado.',
+      });
+    },
+
+    async resetPassword(token: string, new_password: string): Promise<void> {
+      await api.post('/api/v1/auth/reset-password', { token, new_password });
+      Notify.create({
+        type: 'positive',
+        message: 'Senha redefinida com sucesso. Você pode fazer login agora.',
+      });
+    },
+
+    async verifyEmail(token: string): Promise<UserProfile> {
+        const response = await api.get(`/api/v1/auth/verify-email/${token}`);
+        Notify.create({
+            type: 'positive',
+            message: 'Email verificado com sucesso!',
+        });
+        return response.data;
+    },
+
     // --- FUNÇÕES DE PERFIL E SEGURANÇA (MFA) ---
 
     async updateUserProfile(data: ProfileUpdateData): Promise<void> {
         if (!this.isLoggedIn) throw new Error("Usuário não autenticado.");
         
-        // Remove campos vazios para evitar erros na API
         const dataToSend = Object.fromEntries(
             Object.entries(data).filter(([_, v]) => v !== null && v !== undefined && v !== '')
         );
 
-        // Chamada da rota PUT /users/me do Auth API
         await api.put('/api/v1/users/me', dataToSend);
         
-        // Atualiza os dados locais do usuário
         await this.fetchUser();
         Notify.create({ type: 'positive', message: 'Perfil atualizado com sucesso!' });
     },
 
 
-    async startMFAEnrollment(): Promise<{ secret: string; qr_code_url: string }> {
+    async startMFAEnrollment(): Promise<MFAEnrollmentResponse> {
         if (!this.isLoggedIn) throw new Error("Usuário não autenticado.");
 
-        // Rota para iniciar o MFA
-        const response = await api.post('/api/v1/auth/mfa/enroll');
-        return response.data; // Deve retornar { secret, qr_code_url }
+        const response = await api.post('/api/v1/auth/mfa/enable');
+        // O QR code vem em base64 (string)
+        return response.data;
     },
 
-    async verifyAndEnableMFA(secret: string, code: string): Promise<boolean> {
+    async confirmMFA(otp_code: string): Promise<MFAConfirmResponse> {
         if (!this.isLoggedIn) throw new Error("Usuário não autenticado.");
         
-        // Rota para finalizar a ativação do MFA
-        await api.post('/api/v1/auth/mfa/verify', { secret, code });
+        const response = await api.post('/api/v1/auth/mfa/confirm', { otp_code });
 
         // Se bem-sucedido, atualiza o status local
         await this.fetchUser(); 
         Notify.create({ type: 'positive', message: 'Autenticação de dois fatores ativada.' });
-        return true;
+        return response.data; // Retorna user e recovery_codes
     },
 
-    async disableMFA(): Promise<boolean> {
+    async disableMFA(otp_code: string): Promise<boolean> {
         if (!this.isLoggedIn) throw new Error("Usuário não autenticado.");
         
-        // Rota para desativar o MFA
-        await api.post('/api/v1/auth/mfa/disable');
+        await api.post('/api/v1/auth/mfa/disable', { otp_code });
 
         // Atualiza o status local
         await this.fetchUser();
         Notify.create({ type: 'positive', message: 'Autenticação de dois fatores desativada.' });
         return true;
+    },
+
+    // --- FUNÇÕES DE GESTÃO DE SESSÃO/DISPOSITIVOS ---
+
+    // Modelo de TrustedDeviceInfo é necessário aqui, mas para simplicidade, usamos 'any' ou criamos uma interface local.
+    async fetchActiveSessions(): Promise<any[]> {
+        if (!this.isLoggedIn) throw new Error("Usuário não autenticado.");
+        const response = await api.get('/api/v1/auth/sessions');
+        return response.data;
+    },
+
+    async logoutSpecificSession(sessionId: number): Promise<void> {
+        if (!this.isLoggedIn) throw new Error("Usuário não autenticado.");
+        await api.delete(`/api/v1/auth/sessions/${sessionId}`);
+        Notify.create({ type: 'positive', message: 'Sessão encerrada com sucesso.' });
+    },
+
+    async logoutAllOtherSessions(): Promise<void> {
+        if (!this.isLoggedIn || !this.refreshToken) throw new Error("Usuário não autenticado.");
+        // Usa o endpoint que exclui todas exceto o token enviado
+        await api.post('/api/v1/auth/sessions/all-except-current', { 
+            refresh_token: this.refreshToken 
+        });
+        Notify.create({ type: 'positive', message: 'Todas as outras sessões foram encerradas.' });
     },
   },
 });

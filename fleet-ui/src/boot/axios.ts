@@ -1,5 +1,5 @@
 import { boot } from 'quasar/wrappers';
-import axios, { AxiosInstance } from 'axios';
+import axios, { type AxiosInstance } from 'axios'; // CORREÇÃO: Usando 'type' para AxiosInstance
 import { useAuthStore } from 'src/stores/auth-store';
 import { LocalStorage } from 'quasar';
 

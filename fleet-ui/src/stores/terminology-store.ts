@@ -1,5 +1,4 @@
 import { defineStore } from 'pinia';
-// 'computed' foi REMOVIDO da importação porque já não é usado diretamente
 import type { UserSector } from 'src/models/auth-models';
 import { AgroStrategy, ServicesStrategy, ConstructionStrategy, FreightStrategy } from 'src/sector-strategies';
 import type { ISectorStrategy } from 'src/sector-strategies/strategy.interface';
@@ -31,9 +30,12 @@ export const useTerminologyStore = defineStore('terminology', {
       }
     },
     
-    // --- CORRIGIDO ---
+    // --- CORREÇÃO: Adicionando os getters que estavam faltando ---
+    fleetNoun(): string { return this.activeStrategy.fleetNoun; }, // NOVO
+    implementNounPlural(): string { return this.activeStrategy.implementNounPlural; }, // NOVO
+    // --- FIM CORREÇÃO ---
+    
     // Todos os outros getters agora usam 'this' para aceder ao getter 'activeStrategy'
-    // Isto remove o erro 'Unexpected any' e é a forma correta de encadear getters.
     vehicleNoun(): string { return this.activeStrategy.vehicleNoun; },
     vehicleNounPlural(): string { return this.activeStrategy.vehicleNounPlural; },
     journeyNoun(): string { return this.activeStrategy.journeyNoun; },

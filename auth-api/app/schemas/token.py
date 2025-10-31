@@ -1,7 +1,7 @@
 # auth_api/app/schemas/token.py
 from pydantic import BaseModel
 from typing import Literal, List, Optional
-from datetime import datetime # <-- ADICIONAR datetime
+from datetime import datetime 
 
 class Token(BaseModel):
     access_token: str
@@ -16,6 +16,21 @@ class TokenPayload(BaseModel):
 
 class RefreshTokenRequest(BaseModel):
     refresh_token: str
+
+# --- NOVOS SCHEMAS PARA O CRUD (ADICIONADO) ---
+# Necessário para a definição genérica de CRUDBase[Model, CreateSchema, UpdateSchema]
+
+class RefreshTokenCreate(BaseModel):
+    """Schema para criar um Refresh Token. Mínimo, pois a lógica está no CRUD."""
+    # O Refresh Token é sempre criado com dados internos (user_id, token, expires_at),
+    # mas o Base precisa de um schema válido.
+    pass # Pode ser vazio, pois o CRUD lida com a geração do token.
+
+class RefreshTokenUpdate(BaseModel):
+    """Schema para atualizar um Refresh Token."""
+    is_revoked: bool = False
+    
+# --- FIM DOS SCHEMAS CRUD ---
 
 # --- Schema: Resposta MFA Obrigatório ---
 class MFARequiredResponse(BaseModel):

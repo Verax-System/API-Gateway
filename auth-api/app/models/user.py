@@ -28,7 +28,7 @@ class User(Base):
     # --- Fim Campos Verificação ---
     reset_password_token_hash: Mapped[Optional[str]] = mapped_column(String(255), index=True)
     reset_password_token_expires: Mapped[Optional[datetime]] = mapped_column(DateTime)
-
+    is_superuser: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # --- Campos: Account Lockout (EXISTENTES) ---
     failed_login_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     locked_until: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True) 

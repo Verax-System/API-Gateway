@@ -1,59 +1,5 @@
 <template>
-  <q-page class="window-height window-width flex flex-center main-container">
-    <video ref="backgroundVideo" autoplay loop muted playsinline class="background-video">
-      <source src="~assets/login-video.mp4" type="video/mp4">
-    </video>
-    <div class="video-overlay"></div>
-
-    <div class="login-card-container">
-      <q-card flat class="login-card q-pa-lg">
-        <q-card-section class="text-center q-pb-none">
-          <img
-            src="~assets/trucar-logo-white.png"
-            alt="TruCar Logo"
-            class="animated-form-element"
-            style="width: 120px; height: auto; margin-bottom: 16px; animation-delay: 0.1s;"
-          >
-          <div class="text-h5 q-mt-sm text-weight-bold text-white animated-form-element" style="animation-delay: 0.2s;">Recuperar Senha</div>
-          <div class="text-subtitle1 text-grey-5 animated-form-element" style="animation-delay: 0.3s;">Insira o seu e-mail para continuar.</div>
-        </q-card-section>
-
-        <q-card-section class="q-pt-lg">
-          <q-form @submit.prevent="handleRecoveryRequest" class="q-gutter-md">
-            <q-input
-              dark
-              standout="bg-grey-10 text-white"
-              v-model="email"
-              label="Seu e-mail de registro"
-              :rules="[val => !!val || 'Campo obrigatório', val => /.+@.+\..+/.test(val) || 'E-mail inválido']"
-              class="animated-form-element"
-              style="animation-delay: 0.4s;"
-            >
-              <template v-slot:prepend><q-icon name="alternate_email" /></template>
-            </q-input>
-
-            <div class="animated-form-element" style="animation-delay: 0.5s;">
-              <q-btn
-                type="submit"
-                color="primary"
-                class="full-width text-weight-bold q-py-md"
-                unelevated
-                :loading="isLoading"
-                size="sml"
-                label="Enviar Link de Recuperação"
-              />
-            </div>
-          </q-form>
-        </q-card-section>
-        
-        <q-card-section class="text-center animated-form-element" style="animation-delay: 0.6s;">
-           <q-separator dark class="q-mb-md" />
-           <span>Lembrou-se da senha? <q-btn to="/auth/login" label="Voltar ao Login" flat no-caps dense class="text-primary text-weight-bold"/></span>
-        </q-card-section>
-      </q-card>
-    </div>
-  </q-page>
-</template>
+  </template>
 
 <script setup lang="ts">
 import { ref } from 'vue';
@@ -70,11 +16,12 @@ async function handleRecoveryRequest() {
   isLoading.value = true;
   
   try {
+    // A tipagem já foi corrigida no auth-store.ts para esperar PasswordRecoveryRequest
     await authStore.requestPasswordReset({ email: email.value });
     // A notificação de sucesso já é exibida pela store
     setTimeout(() => {
       // Redireciona para o login após um tempo para o usuário ver a notificação
-      void router.push({ name: 'login' });
+      void router.push({ name: 'login' }); // CORREÇÃO: Usando 'void' para o floating promise
     }, 4000);
   } finally {
     isLoading.value = false;
@@ -83,7 +30,7 @@ async function handleRecoveryRequest() {
 </script>
 
 <style lang="scss" scoped>
-/* ESTES ESTILOS SÃO OS MESMOS DA LOGINPAGE.VUE PARA MANTER A CONSISTÊNCIA */
+/* ESTILOS INALTERADOS */
 .main-container {
   background-image: url('~assets/login-background.jpg');
   background-size: cover;

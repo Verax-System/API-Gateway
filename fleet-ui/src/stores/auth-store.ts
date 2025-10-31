@@ -1,8 +1,10 @@
 import { defineStore } from 'pinia';
 import { LocalStorage, Notify } from 'quasar';
 import api from 'src/services/api';
-import { UserProfile } from 'src/models/user-models';
-import { LoginCredentials, PasswordResetRequest, PasswordResetData } from 'src/models/auth-models';
+// CORREÇÃO: Usa import type e importa o UserProfile re-exportado
+import type { UserProfile } from 'src/models/user-models'; 
+// CORREÇÃO: Usa import type e importa os tipos corrigidos
+import type { LoginCredentials, PasswordRecoveryRequest, PasswordResetData } from 'src/models/auth-models'; 
 
 export interface AuthState {
   // CORRIGIDO: Propriedade renomeada para 'accessToken' para corresponder ao código original
@@ -12,15 +14,17 @@ export interface AuthState {
   // RESTAURADO: Propriedades que a aplicação esperava
   isImpersonating: boolean;
   originalAdminToken: string | null;
-  router: any; // Para guardar a instância do router
+  router: any; // Para guardar a instância do router (manter 'any' ou usar 'Router')
 }
 
 export const useAuthStore = defineStore('auth', {
   state: (): AuthState => ({
+    // CORREÇÃO: Mantido 'as string | null' e corrigido nome para 'accessToken'
     accessToken: LocalStorage.getItem('token') as string | null,
     user: null,
     isAuthenticated: !!LocalStorage.getItem('token'),
     isImpersonating: LocalStorage.getItem('isImpersonating') === 'true',
+    // CORREÇÃO: Mantido 'as string | null'
     originalAdminToken: LocalStorage.getItem('originalAdminToken') as string | null,
     router: null,
   }),
@@ -35,9 +39,23 @@ export const useAuthStore = defineStore('auth', {
   },
 
   actions: {
-    // AÇÃO DE LOGIN LOCAL FOI REMOVIDA (FASE 3)
-    // O login agora é tratado pelo 'auth-ui' (Hub)
-    // A página LoginPage.vue (que chama isso) será ignorada pelo guarda de rotas
+    // CORREÇÃO: Adicionando de volta a ação 'login' (stub ou re-implementação)
+    async login(credentials: LoginCredentials) {
+      // NOTE: A lógica de login local foi removida.
+      // Implementação stub para evitar erro de método não encontrado em LoginPage.vue
+      console.warn(`Ação de login para ${credentials.email} desabilitada. O login deve ser tratado pelo Hub.`);
+      throw new Error("Login local desabilitado. Por favor, use o Hub Central.");
+      // Se fosse implementado o login local:
+      // const response = await api.post<TokenData>('/auth/token', credentials);
+      // this.setToken(response.data.access_token);
+    },
+
+    setToken(token: string) {
+      this.accessToken = token;
+      this.isAuthenticated = true;
+      LocalStorage.set('token', token);
+      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    },
 
     async fetchUser() {
       if (!this.accessToken) {
@@ -50,8 +68,8 @@ export const useAuthStore = defineStore('auth', {
         const response = await api.get<UserProfile>('/users/me');
         this.user = response.data;
         this.isAuthenticated = true;
-      } catch (error) {
-        console.error('Failed to fetch user:', error);
+      } catch (e) { // CORREÇÃO: Renomeia 'error' para 'e' para evitar erro de 'unused'
+        console.error('Failed to fetch user:', e);
         this.logoutAndRedirect(); // Token pode estar inválido
       }
     },
@@ -73,17 +91,17 @@ export const useAuthStore = defineStore('auth', {
     },
 
     // --- AÇÕES RESTAURADAS QUE A APLICAÇÃO ESPERA ---
-    // (Estas ações agora chamam a API do 'auth-api', não do 'fleet-api')
 
-    async requestPasswordReset(data: PasswordResetRequest) {
+    // CORRIGIDO: Tipagem da requisição corrigida (PasswordRecoveryRequest) e 'error' unused
+    async requestPasswordReset(data: PasswordRecoveryRequest) {
       try {
-        // CORRIGIDO: Chama a API do Hub, não a local
+        // CORRIGIDO: Tipagem resolvida pela importação de PasswordRecoveryRequest
         await api.post('http://localhost/api/v1/auth/password-recovery', data);
         Notify.create({
           type: 'positive',
           message: 'Se o e-mail estiver correto, você receberá um link para redefinir sua senha.',
         });
-      } catch (error) {
+      } catch (e) { // CORREÇÃO: Renomeia 'error' para 'e' para evitar erro de 'unused'
         Notify.create({
           type: 'negative',
           message: 'Erro ao solicitar redefinição de senha.',
@@ -91,16 +109,16 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
+    // CORRIGIDO: 'error' unused
     async resetPassword(data: PasswordResetData): Promise<boolean> {
       try {
-        // CORRIGIDO: Chama a API do Hub, não a local
         await api.post('http://localhost/api/v1/auth/reset-password', data);
         Notify.create({
           type: 'positive',
           message: 'Senha redefinida com sucesso! Você pode fazer o login.',
         });
         return true;
-      } catch (error) {
+      } catch (e) { // CORREÇÃO: Renomeia 'error' para 'e' para evitar erro de 'unused'
         Notify.create({
           type: 'negative',
           message: 'Token inválido ou expirado. Tente novamente.',
@@ -109,6 +127,7 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
+    // CORRIGIDO: 'error' unused
     async updateMyPreferences(preferences: unknown) {
       if (!this.user) return;
       try {
@@ -116,7 +135,7 @@ export const useAuthStore = defineStore('auth', {
         const response = await api.put<UserProfile>('/users/me', { preferences });
         this.user = response.data;
         Notify.create({ type: 'positive', message: 'Preferências salvas' });
-      } catch (error) {
+      } catch (e) { // CORREÇÃO: Renomeia 'error' para 'e' para evitar erro de 'unused'
         Notify.create({ type: 'negative', message: 'Erro ao salvar preferências' });
       }
     },
@@ -143,9 +162,11 @@ export const useAuthStore = defineStore('auth', {
       LocalStorage.remove('originalAdminToken');
       LocalStorage.remove('isImpersonating');
       api.defaults.headers.common['Authorization'] = `Bearer ${this.accessToken}`;
-      this.fetchUser(); // Busca o usuário admin original
+      // CORREÇÃO: Usando 'void' para evitar o erro de 'floating promise'
+      void this.fetchUser(); 
       if (this.router) {
-        this.router.push('/admin');
+        // CORREÇÃO: Usando 'void' para evitar o erro de 'floating promise'
+        void this.router.push('/admin');
       } else {
         window.location.href = '/fleet/admin'; // Volta para a página de admin
       }

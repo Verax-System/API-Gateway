@@ -2,7 +2,14 @@
 from loguru import logger
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Union, List, Optional
-from app.crud import crud_refresh_token, crud_mfa_recovery_code, crud_user
+
+# --- CORREÇÃO COMPLETA: Importar as instâncias diretamente dos ficheiros ---
+from app.crud.crud_refresh_token import crud_refresh_token 
+from app.crud.crud_mfa_recovery_code import crud_mfa_recovery_code
+from app.crud.crud_user import crud_user 
+from app.crud.crud_trusted_device import crud_trusted_device
+# --- FIM CORREÇÃO ---
+
 from fastapi import APIRouter, Depends, HTTPException, status, Response, Request, Path, BackgroundTasks # Adicionado Request, Response, Path, BackgroundTasks
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,7 +37,9 @@ from app.schemas.trusted_device import TrustedDeviceInfo # Schema para listar di
 
 from app.models.user import User as UserModel
 # Importar CRUDs necessários
-from app.crud import crud_trusted_device # CRUD para dispositivos confiáveis
+# --- CORREÇÃO: Importar a instância, não o módulo ---
+from app.crud.crud_trusted_device import TrustedDeviceCreate # CRUD para dispositivos confiáveis
+# --- FIM CORREÇÃO ---
 
 from app.services.email_service import send_password_reset_email, send_verification_email # Serviços de email
 

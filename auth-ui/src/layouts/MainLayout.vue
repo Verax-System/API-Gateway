@@ -1,77 +1,91 @@
 <template>
   <q-layout view="lHh Lpr lFf">
-    <q-header elevated>
+    <q-header elevated class="bg-primary text-white">
       <q-toolbar>
-        <q-btn
-          flat
-          dense
-          round
-          icon="menu"
-          aria-label="Menu"
-          @click="toggleLeftDrawer"
-        />
+        <q-btn flat dense round icon="menu" aria-label="Menu" @click="toggleLeftDrawer" />
 
         <q-toolbar-title>
-          Virax Hub
+          Verax Hub
         </q-toolbar-title>
 
-        <div>
-          <q-btn flat dense round icon="logout" @click="handleLogout" />
-        </div>
+        <q-space />
+
+        <q-btn flat round dense icon="notifications">
+          <q-badge color="red" floating transparent>2</q-badge>
+          <q-menu>
+            <q-list style="min-width: 300px">
+              <q-item-label header>Notificações</q-item-label>
+              <q-item clickable v-ripple>
+                <q-item-section avatar><q-icon name="warning" color="orange" /></q-item-section>
+                <q-item-section>Verificação de e-mail pendente</q-item-section>
+              </q-item>
+              <q-item clickable v-ripple>
+                <q-item-section avatar><q-icon name="new_releases" color="blue" /></q-item-section>
+                <q-item-section>Nova atualização de software!</q-item-section>
+              </q-item>
+              <q-separator />
+              <q-item clickable class="text-center">
+                <q-item-section>Ver todas</q-item-section>
+              </q-item>
+            </q-list>
+          </q-menu>
+        </q-btn>
+        
+        <q-btn flat round dense icon="account_circle" class="q-ml-sm">
+          <q-menu>
+            <div class="row no-wrap q-pa-md">
+              <div class="column items-center">
+                <q-avatar size="72px">
+                  <img :src="authStore.user?.avatar_url || 'https://placehold.co/72x72/26A69A/FFFFFF?text=V'" alt="User Avatar">
+                </q-avatar>
+                <div class="text-subtitle1 q-mt-md q-mb-xs">{{ authStore.user?.full_name || 'Usuário' }}</div>
+                <div class="text-caption text-grey">{{ authStore.user?.email || 'N/A' }}</div>
+                <q-btn color="primary" label="Configurações" unelevated size="sm" v-close-popup class="q-mt-md" @click="goToProfile" />
+                <q-btn flat color="primary" label="Sair" size="sm" v-close-popup @click="handleLogout" />
+              </div>
+            </div>
+          </q-menu>
+        </q-btn>
       </q-toolbar>
     </q-header>
 
-    <q-drawer
-      v-model="leftDrawerOpen"
-      show-if-above
-      bordered
-    >
-      <q-list>
-        <q-item-label
-          header
-        >
-          Menu Principal
-        </q-item-label>
+    <q-drawer v-model="leftDrawerOpen" show-if-above bordered>
+      <q-scroll-area style="height: calc(100% - 150px); margin-top: 0; border-right: 1px solid #ddd">
+        <q-list padding>
+          <q-item-label header>
+            Navegação Principal
+          </q-item-label>
 
-        <EssentialLink
-          v-for="link in essentialLinks"
-          :key="link.title"
-          v-bind="link"
-        />
+          <EssentialLink v-for="link in essentialLinks" :key="link.title" v-bind="link" />
 
-        <q-item-label header>Aplicações</q-item-label>
+          <q-separator class="q-my-md" />
 
-        <q-item
-          clickable
-          tag="a"
-          href="/fleet/"
-          target="_blank" 
-        >
-          <q-item-section avatar>
-            <q-icon name="local_shipping" />
-          </q-item-section>
-          <q-item-section>
-            <q-item-label>Gestão de Frota</q-item-label>
-            <q-item-label caption>Acessar o TruCar</q-item-label>
-          </q-item-section>
-        </q-item>
-
-        <q-item
-          clickable
-          tag="a"
-          href="/sales/"
-          target="_blank"
-        >
-          <q-item-section avatar>
-            <q-icon name="point_of_sale" />
-          </q-item-section>
-          <q-item-section>
-            <q-item-label>Ponto de Venda</q-item-label>
-            <q-item-label caption>Acessar o VRSales</q-item-label>
-          </q-item-section>
-        </q-item>
-
+          <q-item-label header>
+            Aplicações (Setores)
+          </q-item-label>
+          
+          <q-item
+            v-for="app in hubStore.getFilteredApps(authStore.user)"
+            :key="app.route"
+            clickable
+            v-ripple
+            :href="`http://localhost/${app.route}`"
+            target="_self"
+          >
+            <q-item-section avatar>
+              <q-icon :name="app.icon" />
+            </q-item-section>
+            <q-item-section>
+              <q-item-label>{{ app.title }}</q-item-label>
+              <q-item-label caption>{{ app.caption }}</q-item-label>
+            </q-item-section>
+          </q-item>
         </q-list>
+      </q-scroll-area>
+
+      <div class="absolute-bottom bg-grey-2 q-pa-md">
+        <div class="text-caption text-grey-7">Versão 1.0.0</div>
+      </div>
     </q-drawer>
 
     <q-page-container>
@@ -82,91 +96,56 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
-import EssentialLink, { EssentialLinkProps } from 'components/EssentialLink.vue';
-import { useAuthStore } from 'src/stores/auth-store';
 import { useRouter } from 'vue-router';
+import EssentialLink from 'components/EssentialLink.vue';
+import { useAuthStore } from 'stores/auth-store';
+import { useHubStore } from 'stores/hub-store';
+import { useQuasar } from 'quasar';
 
+// Interfaces
+interface EssentialLinkProps {
+  title: string;
+  caption: string;
+  icon: string;
+  link: string;
+}
+
+// Lojas
+const authStore = useAuthStore();
+const hubStore = useHubStore();
+const router = useRouter();
+const $q = useQuasar();
+
+// Estado
+const leftDrawerOpen = ref(false);
+
+// Links de navegação estáticos do Hub (CORRIGIDOS)
 const essentialLinks: EssentialLinkProps[] = [
   {
     title: 'Dashboard',
-    caption: 'Visão Geral',
+    caption: 'Visão Geral do Sistema',
     icon: 'dashboard',
-    link: '/dashboard',
+    link: '/hub/dashboard', 
   },
   {
-    title: 'Usuários',
-    caption: 'Gerenciamento de Usuários',
-    icon: 'people',
-    link: '/admin/users', // Assumindo que você tem essa rota
+    title: 'Configurações',
+    caption: 'Perfil e Segurança (2FA)',
+    icon: 'settings',
+    link: '/hub/settings/security', 
   },
+  // O link de 'Gerenciar Usuários' foi removido por falta da UsersPage.vue
 ];
-
-const leftDrawerOpen = ref(false);
-const authStore = useAuthStore();
-const router = useRouter();
 
 function toggleLeftDrawer() {
   leftDrawerOpen.value = !leftDrawerOpen.value;
 }
 
 function handleLogout() {
-  authStore.logout();
-  router.push('/login');
+  authStore.logoutAndRedirect();
+}
+
+function goToProfile() {
+  // CORREÇÃO: Redireciona para a página de configurações, já que a página de perfil individual/gerenciamento foi removida.
+  void router.push('/hub/settings/security'); 
 }
 </script>
-
-<script setup lang="ts">
-import { ref } from 'vue';
-import { useAuthStore } from 'src/stores/auth-store';
-
-const leftDrawerOpen = ref(false);
-const authStore = useAuthStore();
-
-function toggleLeftDrawer() {
-  leftDrawerOpen.value = !leftDrawerOpen.value;
-}
-</script>
-
-<style lang="scss" scoped>
-// Cores e Estilos do nosso Protótipo
-.bg-dark-theme {
-  background-color: #12121c;
-}
-.bg-dark-drawer {
-  background-color: #1e1e2f;
-  border-right: 1px solid #2d2d4a;
-}
-.bg-dark-header {
-  background-color: #1e1e2f;
-  border-bottom: 1px solid #2d2d4a;
-}
-.sidebar-header .logo {
-  font-size: 2.5rem;
-  background: linear-gradient(45deg, #8e44ad, #2980b9);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  font-weight: 700;
-}
-.nav-item {
-  color: #bdc3c7;
-  border-radius: 8px;
-  margin: 4px 10px; // Espaçamento entre os itens
-  &.active-item {
-    color: white;
-    // Gradiente sutil para o item ativo, combinando com o logo
-    background: linear-gradient(90deg, #8e44ad, #3498db);
-  }
-   &:hover {
-    background-color: #2d2d4a;
-  }
-  .q-item__section--avatar {
-    min-width: 40px;
-  }
-}
-
-.user-profile-section {
-  border-top: 1px solid #2d2d4a;
-  background-color: #1e1e2f; // Mantém a cor de fundo consistente
-}
-</style>
-

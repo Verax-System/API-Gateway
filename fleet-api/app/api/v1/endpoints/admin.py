@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 
@@ -21,7 +21,8 @@ async def read_organizations_as_admin(
     skip: int = 0,
     limit: int = 100,
     status: Optional[str] = None, # Parâmetro de filtro: 'demo' ou 'active'
-    current_user: User = Depends(deps.get_current_super_admin)
+    # CORREÇÃO: Substituindo get_current_super_admin
+    current_user: User = Depends(deps.get_current_active_superuser) 
 ):
     """(Super Admin) Lista todas as organizações, com opção de filtro por status."""
     organizations = await crud.organization.get_multi(
@@ -36,7 +37,8 @@ async def update_organization_as_admin(
     db: AsyncSession = Depends(deps.get_db),
     org_id: int,
     org_in: OrganizationUpdate,
-    current_user: User = Depends(deps.get_current_super_admin)
+    # CORREÇÃO: Substituindo get_current_super_admin
+    current_user: User = Depends(deps.get_current_active_superuser) 
 ):
     """(Super Admin) Atualiza os dados de uma organização (ex: nome, setor)."""
     org_to_update = await crud.organization.get(db=db, id=org_id)
@@ -55,7 +57,8 @@ async def update_organization_as_admin(
 @router.get("/users/demo", response_model=List[UserPublic])
 async def read_demo_users_as_admin(
     db: AsyncSession = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_super_admin)
+    # CORREÇÃO: Substituindo get_current_super_admin
+    current_user: User = Depends(deps.get_current_active_superuser) 
 ):
     """(Super Admin) Retorna a lista de todos os utilizadores com o papel CLIENTE_DEMO."""
     demo_users = await crud.user.get_users_by_role(
@@ -66,10 +69,12 @@ async def read_demo_users_as_admin(
 @router.get("/users/all", response_model=List[UserPublic])
 async def read_all_users_as_admin(
     db: AsyncSession = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_super_admin)
+    # CORREÇÃO: Substituindo get_current_super_admin
+    current_user: User = Depends(deps.get_current_active_superuser) 
 ):
     """(Super Admin) Retorna a lista de TODOS os utilizadores da plataforma."""
-    all_users = await crud.user.get_multi_by_org(db)
+    # O método 'get_multi_by_org' sem organization_id retorna todos os usuários.
+    all_users = await crud.user.get_multi_by_org(db) 
     return all_users
 
 
@@ -78,7 +83,8 @@ async def activate_user_account_as_admin(
     *,
     db: AsyncSession = Depends(deps.get_db),
     user_id: int,
-    current_user: User = Depends(deps.get_current_super_admin)
+    # CORREÇÃO: Substituindo get_current_super_admin
+    current_user: User = Depends(deps.get_current_active_superuser) 
 ):
     """(Super Admin) Ativa um utilizador, promovendo o seu papel para CLIENTE_ATIVO."""
     user_to_activate = await crud.user.get(db=db, id=user_id)
@@ -105,7 +111,8 @@ async def impersonate_user(
     *,
     db: AsyncSession = Depends(deps.get_db),
     user_id: int,
-    current_user: User = Depends(deps.get_current_super_admin) # Protegido
+    # CORREÇÃO: Substituindo get_current_super_admin
+    current_user: User = Depends(deps.get_current_active_superuser) 
 ):
     """
     (Super Admin) Gera um token de acesso para entrar como outro utilizador.

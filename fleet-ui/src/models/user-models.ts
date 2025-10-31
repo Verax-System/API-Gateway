@@ -1,6 +1,11 @@
+// Conteúdo Corrigido: verax-system/api-gateway/API-Gateway-c3fe88eb14bfb6ca66aceedbb2ffed4c7fcf88e4/fleet-ui/src/models/user-models.ts
+
+// CORREÇÃO: Importa a interface correta de auth-models e re-exporta para satisfazer auth-store.ts
+import type { UserProfile } from './auth-models';
+export type { UserProfile };
 
 // O tipo 'UserRole' é importado implicitamente através do tipo 'User'
-type UserRole = User['role'];
+type UserRole = UserProfile['role']; // CORREÇÃO: Usa o tipo correto de UserProfile
 
 // Usado ao criar um novo utilizador
 export interface UserCreate {
@@ -62,13 +67,4 @@ export interface LeaderboardUser {
   total_journeys: number;
 }
 
-export interface User {
-  id: number;
-  full_name: string;
-  email: string;
-  role: 'cliente_ativo' | 'cliente_demo' | 'driver';
-  is_active: boolean;
-  avatar_url?: string | null;
-  organization_id: number;
-  employee_id: string;
-}
+// A interface 'User' original foi removida para evitar duplicação com 'UserProfile'

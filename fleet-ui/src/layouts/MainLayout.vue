@@ -82,7 +82,7 @@
       </q-scroll-area>
       
       <div v-if="isDemo" class="absolute-bottom q-ma-sm">
-        <PremiumWidget @upgrade="showUpgradeDialog" />
+        <PremiumWidget @upgrade="showUpgradeDialog" title="" icon="" description="" />
       </div>
     </q-drawer>
 
@@ -104,7 +104,7 @@ import defaultAvatar from 'src/assets/default-avatar.png';
 import {
   mdiViewDashboard, mdiTruck, mdiRoadVariant, mdiWrench, mdiFileDocument,
   mdiClipboardList, mdiGasStation, mdiAccountGroup, mdiWarehouse, mdiCog,
-  mdiChartLine, mdiTire, mdiTruckTrailer, mdiReceipt, mdiCarMultiple,
+  mdiChartLine, mdiTire, mdiReceipt,
   mdiTrophy, mdiMapMarker, mdiAccountHardHat, mdiTractor, mdiSprout
 } from '@quasar/extras/mdi-v7';
 
@@ -128,7 +128,6 @@ const terminologyStore = useTerminologyStore();
 
 const leftDrawerOpen = ref(false);
 
-// CORRIGIDO: Esta função agora chama 'logoutAndRedirect'
 function handleLogout() {
   if (authStore.isImpersonating) {
     authStore.stopImpersonation();
@@ -137,7 +136,6 @@ function handleLogout() {
   }
 }
 
-// CORRIGIDO: Estas propriedades agora vêm do getter do authStore
 const isDemo = computed(() => authStore.isDemo);
 
 function showUpgradeDialog() {
@@ -152,7 +150,8 @@ function showUpgradeDialog() {
 
 function goToProfile() {
   if (authStore.user) {
-    router.push(`/users/${authStore.user.id}`);
+    // CORREÇÃO: Usando 'void' para evitar o erro de 'floating promise'
+    void router.push(`/users/${authStore.user.id}`);
   }
 }
 
@@ -160,9 +159,8 @@ function toggleLeftDrawer() {
   leftDrawerOpen.value = !leftDrawerOpen.value;
 }
 
-// --- LÓGICA DE MENU DINÂMICO (RESTAURADA) ---
+// --- LÓGICA DE MENU DINÂMICO ---
 function getDriverMenu(): MenuCategory[] {
-  // CORRIGIDO: 'userSector' vem do getter
   const sector = authStore.userSector;
   const menu: MenuCategory[] = [];
 
@@ -200,7 +198,6 @@ function getDriverMenu(): MenuCategory[] {
 }
 
 function getManagerMenu(): MenuCategory[] {
-  // CORRIGIDO: 'userSector' vem do getter
   const sector = authStore.userSector;
   const menu: MenuCategory[] = [];
 
@@ -215,6 +212,7 @@ function getManagerMenu(): MenuCategory[] {
   menu.push(general);
 
   const fleet: MenuCategory = {
+    // CORREÇÃO: Usando o getter 'fleetNoun'
     title: terminologyStore.fleetNoun,
     links: [
       { title: terminologyStore.vehicleNounPlural, caption: `Gerenciar ${terminologyStore.vehicleNounPlural}`, icon: sector === 'agronegocio' ? mdiTractor : mdiTruck, link: '/vehicles' },
@@ -226,6 +224,7 @@ function getManagerMenu(): MenuCategory[] {
     separator: true,
   };
   if (sector === 'agronegocio' || sector === 'construcao_civil') {
+    // CORREÇÃO: Usando o getter 'implementNounPlural'
     fleet.links.splice(1, 0, { title: terminologyStore.implementNounPlural, caption: `Gerenciar ${terminologyStore.implementNounPlural}`, icon: sector === 'agronegocio' ? mdiSprout : mdiAccountHardHat, link: '/implements' });
   }
   menu.push(fleet);

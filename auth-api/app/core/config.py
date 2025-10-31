@@ -1,63 +1,79 @@
-#
+# auth-api/app/core/config.py
 import os
-from pydantic import AnyHttpUrl, EmailStr, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import List, Optional
+from pydantic_settings import BaseSettings
+from pydantic import AnyHttpUrl, EmailStr, validator
+from typing import List, Optional, Union
 from loguru import logger
+import base64
 
 class Settings(BaseSettings):
-    # Configuração do Pydantic para ler do .env
-    # CORRIGIDO: Adicionado extra='ignore' para Pydantic não falhar
-    model_config = SettingsConfigDict(env_file='.env', extra='ignore')
-
-    # Chaves de Segurança e JWT
-    SECRET_KEY: str = "UMA_CHAVE_SECRETA_FORTE_PARA_JWT"
+    # --- CORE ---
+    API_V1_STR: str = "/api/v1"
+    PROJECT_NAME: str = "Verax Auth API"
+    
+    # --- DATABASE ---
+    DATABASE_URL: str
+    
+    # --- SECURITY & JWT ---
+    SECRET_KEY: str
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
-    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    
+    # --- ADMIN USER ---
+    FIRST_SUPERUSER_EMAIL: EmailStr
+    FIRST_SUPERUSER_PASSWORD: str
 
-    # Configuração do Banco de Dados
-    DATABASE_URL: str = "postgresql+psycopg2://user:password@localhost:5432/auth_db"
+    # --- CORS ---
+    BACKEND_CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
+    
+    @property
+    def CORS_ORIGINS(self) -> List[str]:
+        return [origin.strip() for origin in self.BACKEND_CORS_ORIGINS.split(",")]
 
-    # Configuração do Super Usuário Inicial
-    FIRST_SUPERUSER_EMAIL: EmailStr = "admin@example.com"
-    FIRST_SUPERUSER_PASSWORD: str = "your_strong_password"
+    # --- Chaves Secretas (do .env) ---
+    REFRESH_SECRET_KEY: str
+    RESET_PASSWORD_SECRET_KEY: str
+    MFA_CHALLENGE_SECRET_KEY: str
+    INTERNAL_API_KEY: str
+    
+    # --- Duração dos Tokens (do .env) ---
+    REFRESH_TOKEN_EXPIRE_DAYS: int
+    EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES: int
+    RESET_PASSWORD_TOKEN_EXPIRE_MINUTES: int
+    MFA_CHALLENGE_EXPIRE_MINUTES: int
 
-    # Configuração de CORS (Cross-Origin Resource Sharing)
-    BACKEND_CORS_ORIGINS: List[AnyHttpUrl] = []
+    # --- EMAIL SETTINGS (Brevo - do .env) ---
+    BREVO_API_KEY: Optional[str] = None
+    EMAILS_FROM_EMAIL: Optional[EmailStr] = "noreply@verax.com"
+    EMAILS_FROM_NAME: Optional[str] = "Verax Auth"
+    VERIFICATION_URL_BASE: Optional[AnyHttpUrl] = None
+    RESET_PASSWORD_URL_BASE: Optional[AnyHttpUrl] = None
 
-    @field_validator("BACKEND_CORS_ORIGINS", mode='before')
-    def assemble_cors_origins(cls, v: str | List[str]) -> List[AnyHttpUrl] | str:
-        if isinstance(v, str) and not v.startswith("["):
-            return [i.strip() for i in v.split(",")]
-        elif isinstance(v, (list, str)):
-            return v
-        raise ValueError(v)
+    # --- ACCOUNT LOCKOUT (do .env) ---
+    LOGIN_MAX_FAILED_ATTEMPTS: int
+    LOGIN_LOCKOUT_MINUTES: int
 
-    # Configuração de E-mail (Opcional, para recuperação de senha, etc.)
-    SMTP_TLS: bool = True
-    SMTP_PORT: Optional[int] = None
-    SMTP_HOST: Optional[str] = None
-    SMTP_USER: Optional[str] = None
-    SMTP_PASSWORD: Optional[str] = None
-    EMAILS_FROM_EMAIL: Optional[EmailStr] = None
-    EMAILS_FROM_NAME: Optional[str] = None
+    # --- OIDC JWT Claims (do .env) ---
+    JWT_ISSUER: str
+    JWT_AUDIENCE: str
 
-    @field_validator("EMAILS_FROM_NAME")
-    def get_project_name(cls, v: Optional[str]) -> str:
-        if not v:
-            return "VeraxAuth API"
-        return v
+    # --- MFA / TRUSTED DEVICE (do .env) ---
+    TRUSTED_DEVICE_COOKIE_NAME: str
+    TRUSTED_DEVICE_COOKIE_MAX_AGE_DAYS: int
 
-    # Configuração do MFA (Autenticação de Múltiplos Fatores)
-    MFA_CHALLENGE_SECRET_KEY: str = "UMA_QUARTA_CHAVE_SECRETA_FORTE"
-    MFA_CHALLENGE_EXPIRE_MINUTES: int = 5
-    APP_NAME: str = "VeraxAuth"
+    # --- GOOGLE OAUTH (do .env) ---
+    GOOGLE_CLIENT_ID: Optional[str] = None
+    GOOGLE_CLIENT_SECRET: Optional[str] = None
+    GOOGLE_REDIRECT_URI_FRONTEND: Optional[AnyHttpUrl] = None
 
-# --- Carregamento das Configurações ---
+    class Config:
+        case_sensitive = True
+        env_file = ".env"
+        env_file_encoding = 'utf-8'
+
 try:
     settings = Settings()
 except Exception as e:
-    # Este é o log de erro que você viu
-    logger.error(f"FATAL: Erro ao carregar 'settings' a partir do .env em {os.path.abspath('.env')}: {e}")
+    logger.error(f"Erro ao carregar configurações: {e}")
+    # Lança a excepção original para que o log seja claro
     raise e

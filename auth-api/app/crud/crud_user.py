@@ -85,6 +85,36 @@ class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
         await db.refresh(db_obj)
         return db_obj, verification_token
 
+    async def generate_verification_token(self, db: AsyncSession, *, user: User) -> tuple[User, str]:
+        """
+        Gera um novo token de verificação, atualiza o usuário no BD e retorna o token limpo.
+        Usado para o reenvio de e-mail.
+        """
+        # 1. Gerar novo Token e Hash
+        verification_token = secrets.token_urlsafe(32)
+        token_hash = hashlib.sha256(verification_token.encode('utf-8')).hexdigest()
+        expires_delta = timedelta(minutes=settings.EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES)
+        expires_at = datetime.now(timezone.utc) + expires_delta
+
+        # 2. Atualizar o objeto User EXISTENTE
+        user.verification_token_hash = token_hash
+        user.verification_token_expires = expires_at.replace(tzinfo=None)
+        
+        # Garante que o status é UNVERIFIED
+        if user.is_verified:
+            logger.warning(f"Reenviando verificação para usuário já verificado: {user.email}. Setando is_verified=False.")
+            user.is_verified = False 
+            # NÃO VAMOS MUDAR user.is_active = False AQUI. 
+            # O usuário deve permanecer inativo até verificar o email.
+            
+        db.add(user)
+        # CRUCIAL: Salvar as alterações no banco de dados para que o background task 
+        # use o token atualizado!
+        await db.commit() 
+        await db.refresh(user)
+
+        return user, verification_token
+
     async def verify_user_email(self, db: AsyncSession, *, token: str) -> User | None:
         # (Código existente - sem alterações)
         token_hash = hashlib.sha256(token.encode('utf-8')).hexdigest()

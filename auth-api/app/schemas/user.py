@@ -106,4 +106,12 @@ class MFAVerifyRequest(BaseModel):
 class MFARecoveryRequest(BaseModel):
     """Requisição para usar um código de recuperação durante o login."""
     mfa_challenge_token: str
+<<<<<<< HEAD
     recovery_code: str = Field(..., description="Um dos códigos de recuperação de uso único (ex: abc-123)")
+=======
+    recovery_code: str = Field(..., description="Um dos códigos de recuperação de uso único (ex: abc-123)")
+
+class EmailRequest(BaseModel):
+    """Schema simples para receber apenas um e-mail no corpo da requisição."""
+    email: EmailStr
+>>>>>>> 226d4bb11378fe37d171a0e916945c18d6208a5a

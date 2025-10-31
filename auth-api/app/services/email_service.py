@@ -4,11 +4,10 @@ import traceback
 from typing import Dict, Any
 from loguru import logger
 from app.core.config import settings
-from datetime import datetime
-# --- NOVAS IMPORTAÇÕES (httpx e certifi já devem estar lá) ---
+# Importação CORRIGIDA: Agora datetime é acessível globalmente (ex: datetime.now().year)
+from datetime import datetime, timedelta, timezone 
 import httpx
 import certifi
-# --- FIM NOVAS IMPORTAÇÕES ---
 
 # --- MUDANÇA 1: URL da API da Brevo ---
 BREVO_API_URL = "https://api.brevo.com/v3/smtp/email"
@@ -22,17 +21,16 @@ async def send_email_http_api(
     """
     Envia um email usando HTTpx manualmente para a API da Brevo.
     """
-    # --- MUDANÇA 2: Verificar a nova API Key ---
     if not settings.BREVO_API_KEY:
         logger.error("BREVO_API_KEY não está configurada. Email não será enviado.")
         return False
 
-    # --- MUDANÇA 3: Novo formato de Payload (JSON simples da Brevo) ---
-    # Isto substitui a necessidade da biblioteca 'sendgrid.helpers.mail'
     message_payload = {
         "sender": {
-            "name": settings.EMAIL_FROM_NAME or "Verax",
-            "email": settings.EMAIL_FROM
+            # CORREÇÃO: Usar EMAILS_FROM_NAME
+            "name": settings.EMAILS_FROM_NAME or "Verax", 
+            # CORREÇÃO: Usar EMAILS_FROM_EMAIL
+            "email": settings.EMAILS_FROM_EMAIL 
         },
         "to": [
             {"email": email_to}
@@ -41,34 +39,30 @@ async def send_email_http_api(
         "htmlContent": html_content
     }
 
-    # --- MUDANÇA 4: Novo formato de Header (api-key) ---
     headers = {
-        "api-key": settings.BREVO_API_KEY, # Autenticação da Brevo
+        "api-key": settings.BREVO_API_KEY,
         "Content-Type": "application/json",
         "Accept": "application/json"
     }
 
     try:
-        # 3. O transporte HTTpx permanece o mesmo (isto é bom!)
         transport = httpx.AsyncHTTPTransport(verify=certifi.where())
         
         async with httpx.AsyncClient(transport=transport) as client:
             logger.info(f"Enviando email para {email_to} via Brevo (HTTpx)...")
             response = await client.post(
-                BREVO_API_URL, # Mudar para o URL da Brevo
+                BREVO_API_URL,
                 json=message_payload,
                 headers=headers
             )
 
-        # --- MUDANÇA 5: Processar a resposta da Brevo (201 Created) ---
-        # A API v3 da Brevo retorna 201 Created em caso de sucesso
         if 200 <= response.status_code < 300:
             logger.info(f"Email aceito para envio para {email_to} via Brevo. Status: {response.status_code}")
             return True
         else:
             logger.error(f"Falha ao enviar email para {email_to} via Brevo (HTTpx).")
             logger.error(f"Status: {response.status_code}")
-            logger.error(f"Body: {response.text}") # Usar .text para httpx
+            logger.error(f"Body: {response.text}")
             return False
 
     except httpx.ConnectError as e:
@@ -80,21 +74,16 @@ async def send_email_http_api(
         logger.error(f"Traceback completo: {traceback.format_exc()}")
         return False
 
-# --- O RESTANTE DO ARQUIVO (FUNÇÕES DE CONTEÚDO) PERMANECE IGUAL ---
-# Estas funções não precisam de mudança, pois elas apenas chamam 
-# a função send_email_http_api (que acabámos de modificar).
-
 # --- Função específica para email de verificação ---
 async def send_verification_email(email_to: str, verification_token: str) -> bool:
-    # Obtém o nome do projeto a partir das configurações
-    project_name = settings.EMAIL_FROM_NAME or "Nossa Aplicação"
+    # CORREÇÃO: EMAILS_FROM_NAME
+    project_name = settings.EMAILS_FROM_NAME or "Nossa Aplicação"
     subject = f"Bem-vindo(a) a {project_name}! Confirme seu e-mail"
     
     # Obtém a URL de verificação a partir das configurações
     verification_url = f"{settings.VERIFICATION_URL_BASE}/{verification_token}"
 
     # --- Template HTML Profissional com CSS Inline ---
-    # (Cores de exemplo: azul (#007bff) e cinza (#f4f4f4))
     html_content = f"""
     <!DOCTYPE html>
     <html lang="pt-BR">
@@ -194,9 +183,6 @@ async def send_verification_email(email_to: str, verification_token: str) -> boo
     </html>
     """
 
-    # --- Adicionar o 'import datetime' no topo do ficheiro ---
-    # (Certifique-se que 'from datetime import datetime' está no topo de app/services/email_service.py)
-
     return await send_email_http_api(
         email_to=email_to,
         subject=subject,
@@ -205,7 +191,8 @@ async def send_verification_email(email_to: str, verification_token: str) -> boo
 
 # --- Função específica para email de reset de senha ---
 async def send_password_reset_email(email_to: str, reset_token: str) -> bool:
-    project_name = settings.EMAIL_FROM_NAME or "Sua Aplicação"
+    # CORREÇÃO: EMAILS_FROM_NAME
+    project_name = settings.EMAILS_FROM_NAME or "Sua Aplicação"
     subject = f"{project_name} - Redefinição de Senha"
     reset_url = f"{settings.RESET_PASSWORD_URL_BASE}/{reset_token}"
 

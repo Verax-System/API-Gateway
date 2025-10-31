@@ -10,7 +10,10 @@
 
         <q-space />
 
+<<<<<<< HEAD
         <!-- Opções de Notificação (Exemplo) -->
+=======
+>>>>>>> 226d4bb11378fe37d171a0e916945c18d6208a5a
         <q-btn flat round dense icon="notifications">
           <q-badge color="red" floating transparent>2</q-badge>
           <q-menu>
@@ -32,7 +35,10 @@
           </q-menu>
         </q-btn>
         
+<<<<<<< HEAD
         <!-- Perfil do Usuário -->
+=======
+>>>>>>> 226d4bb11378fe37d171a0e916945c18d6208a5a
         <q-btn flat round dense icon="account_circle" class="q-ml-sm">
           <q-menu>
             <div class="row no-wrap q-pa-md">
@@ -42,7 +48,11 @@
                 </q-avatar>
                 <div class="text-subtitle1 q-mt-md q-mb-xs">{{ authStore.user?.full_name || 'Usuário' }}</div>
                 <div class="text-caption text-grey">{{ authStore.user?.email || 'N/A' }}</div>
+<<<<<<< HEAD
                 <q-btn color="primary" label="Ver Perfil" unelevated size="sm" v-close-popup class="q-mt-md" @click="goToProfile" />
+=======
+                <q-btn color="primary" label="Configurações" unelevated size="sm" v-close-popup class="q-mt-md" @click="goToProfile" />
+>>>>>>> 226d4bb11378fe37d171a0e916945c18d6208a5a
                 <q-btn flat color="primary" label="Sair" size="sm" v-close-popup @click="handleLogout" />
               </div>
             </div>
@@ -67,7 +77,11 @@
           </q-item-label>
           
           <q-item
+<<<<<<< HEAD
             v-for="app in hubStore.availableApps"
+=======
+            v-for="app in hubStore.getFilteredApps(authStore.user)"
+>>>>>>> 226d4bb11378fe37d171a0e916945c18d6208a5a
             :key="app.route"
             clickable
             v-ripple
@@ -121,15 +135,20 @@ const $q = useQuasar();
 // Estado
 const leftDrawerOpen = ref(false);
 
+<<<<<<< HEAD
 // Links de navegação estáticos do Hub
+=======
+// Links de navegação estáticos do Hub (CORRIGIDOS)
+>>>>>>> 226d4bb11378fe37d171a0e916945c18d6208a5a
 const essentialLinks: EssentialLinkProps[] = [
   {
     title: 'Dashboard',
     caption: 'Visão Geral do Sistema',
     icon: 'dashboard',
-    link: '/dashboard',
+    link: '/hub/dashboard', 
   },
   {
+<<<<<<< HEAD
     title: 'Gerenciar Usuários',
     caption: 'Configurações e Permissões',
     icon: 'group',
@@ -140,7 +159,14 @@ const essentialLinks: EssentialLinkProps[] = [
     caption: 'Configurações de Perfil',
     icon: 'settings',
     link: '/settings',
+=======
+    title: 'Configurações',
+    caption: 'Perfil e Segurança (2FA)',
+    icon: 'settings',
+    link: '/hub/settings/security', 
+>>>>>>> 226d4bb11378fe37d171a0e916945c18d6208a5a
   },
+  // O link de 'Gerenciar Usuários' foi removido por falta da UsersPage.vue
 ];
 
 function toggleLeftDrawer() {
@@ -148,11 +174,15 @@ function toggleLeftDrawer() {
 }
 
 function handleLogout() {
+<<<<<<< HEAD
   // Chamada de logout do auth-store
+=======
+>>>>>>> 226d4bb11378fe37d171a0e916945c18d6208a5a
   authStore.logoutAndRedirect();
 }
 
 function goToProfile() {
+<<<<<<< HEAD
   if (authStore.user?.id) {
     // CORREÇÃO: Usando 'void' para evitar 'floating promise'
     void router.push(`/users/${authStore.user.id}`);
@@ -161,3 +191,9 @@ function goToProfile() {
   }
 }
 </script>
+=======
+  // CORREÇÃO: Redireciona para a página de configurações, já que a página de perfil individual/gerenciamento foi removida.
+  void router.push('/hub/settings/security'); 
+}
+</script>
+>>>>>>> 226d4bb11378fe37d171a0e916945c18d6208a5a

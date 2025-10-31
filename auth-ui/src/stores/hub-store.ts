@@ -2,8 +2,18 @@
 
 import { defineStore } from 'pinia';
 import { api } from 'src/boot/axios';
+import type { UserProfile } from './auth-store'; // Importa a interface do usuário (assumindo que está em auth-store.ts)
 
-// Interface para definir a estrutura dos nossos KPIs
+// --- NOVAS INTERFACES E CONFIGURAÇÃO ---
+interface HubApp {
+  title: string;
+  caption: string;
+  icon: string; // Quasar/MDI icon name
+  route: string; // Ex: 'fleet' ou 'sales' (subcaminho do Nginx)
+  allowed_roles: string[]; // Quais roles podem ver este app
+}
+// --- FIM NOVAS INTERFACES ---
+
 export interface HubKpis {
   activeVehicles: number;
   totalVehicles: number;
@@ -11,16 +21,40 @@ export interface HubKpis {
   pendingMaintenances: number;
 }
 
+export interface HubState {
+  kpis: HubKpis | null;
+  loading: boolean;
+  error: string | null;
+  availableApps: HubApp[]; // ADICIONADO: Lista de aplicativos setoriais
+}
+
+
 export const useHubStore = defineStore('hub', {
-  state: () => ({
-    // O estado inicial é sempre nulo, forçando o carregamento
-    kpis: null as HubKpis | null,
+  state: (): HubState => ({
+    kpis: null,
     loading: false,
-    error: null as string | null,
+    error: null,
+    // ADICIONADO: Configuração MOCK dos aplicativos setoriais
+    availableApps: [
+      {
+        title: 'Gestão de Frota',
+        caption: 'TruCar (Caminhões e Frotas)',
+        icon: 'local_shipping',
+        route: 'fleet', // Rota do Nginx
+        allowed_roles: ['admin', 'manager', 'motorista'],
+      },
+      {
+        title: 'Gestão de Vendas',
+        caption: 'VrSales (PDV e Estoque)',
+        icon: 'point_of_sale',
+        route: 'sales', // Rota do Nginx
+        allowed_roles: ['admin', 'manager', 'vendedor'],
+      },
+      // Adicione mais aplicações conforme o projeto cresce
+    ],
   }),
 
   getters: {
-    // Getter para facilitar o acesso aos KPIs, com valores padrão seguros
     getKpis: (state): HubKpis => {
       return (
         state.kpis ?? {
@@ -31,32 +65,32 @@ export const useHubStore = defineStore('hub', {
         }
       );
     },
+    // NOVO GETTER: Filtra apps com base no papel do usuário
+    getFilteredApps: (state) => (user: UserProfile | null): HubApp[] => {
+        if (!user) return [];
+        
+        return state.availableApps.filter(app => {
+            // Se o usuário for Superuser, ele vê todos os aplicativos
+            if (user.is_superuser) return true;
+            // Caso contrário, filtra pelo papel do usuário
+            return app.allowed_roles.includes(user.role);
+        });
+    }
   },
 
   actions: {
-    // Ação para buscar os dados da API
     async fetchKpis() {
-      // Evita múltiplas chamadas se já estiver carregando
       if (this.loading) return;
 
       this.loading = true;
       this.error = null;
       try {
-        // --- Ponto Chave ---
-        // Quando o backend do Hub estiver pronto, a chamada real e única será esta linha:
-        // const response = await api.get('/api/v1/hub/kpis/trucar');
-        // this.kpis = response.data;
-        // -------------------
+        await new Promise(resolve => setTimeout(resolve, 1500)); 
 
-        // Simulação de chamada de API aprimorada
-        await new Promise(resolve => setTimeout(resolve, 1500)); // Simula latência de rede
-
-        // Simula uma falha aleatória para testar o estado de erro
         if (Math.random() > 0.9) {
           throw new Error('Falha simulada na rede');
         }
 
-        // Dados que viriam da API
         this.kpis = {
           activeVehicles: 18,
           totalVehicles: 20,
@@ -67,7 +101,6 @@ export const useHubStore = defineStore('hub', {
       } catch (err) {
         this.error = 'Não foi possível carregar os indicadores da operação.';
         console.error('Erro ao buscar KPIs do Hub:', err);
-        // Garante que os dados antigos sejam limpos em caso de erro
         this.kpis = null;
       } finally {
         this.loading = false;

@@ -1,105 +1,81 @@
-# auth_api/app/crud/crud_mfa_recovery_code.py
+import secrets
+from typing import List, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import delete
-from typing import List, Optional
-import secrets
-
-from app.models.user import User
+from app.crud.base import CRUDBase # <-- Necessário para definir a classe
 from app.models.mfa_recovery_code import MFARecoveryCode
-from app.core.security import (
-    get_password_hash, # Reutilizamos o hash de senha
-    verify_password # Reutilizamos a verificação de senha
-)
-from loguru import logger
+# --- CORREÇÃO CRÍTICA ---
+# Importar os Schemas de Criação e Atualização
+from app.schemas.mfa_recovery_code import MFARecoveryCodeCreate, MFARecoveryCodeUpdate 
+# --- FIM CORREÇÃO CRÍTICA ---
+from app.models.user import User
+import hashlib
+from datetime import datetime, timezone
 
-# Quantos códigos gerar
-NUMBER_OF_RECOVERY_CODES = 10
-# Formato do código (ex: abc-123)
-RECOVERY_CODE_LENGTH = 3 
+# --- CORREÇÃO CRÍTICA: A classe CRUD está definida e herda corretamente ---
+class CRUDMFARecoveryCode(CRUDBase[MFARecoveryCode, MFARecoveryCodeCreate, MFARecoveryCodeUpdate]):
+# --- FIM CORREÇÃO CRÍTICA ---
 
-def generate_plain_recovery_codes() -> List[str]:
-    """Gera uma lista de códigos de recuperação legíveis."""
-    codes = []
-    for _ in range(NUMBER_OF_RECOVERY_CODES):
-        # Gera códigos no formato "abc-def"
-        code = f"{secrets.token_hex(RECOVERY_CODE_LENGTH)}-{secrets.token_hex(RECOVERY_CODE_LENGTH)}"
-        codes.append(code)
-    return codes
+    def hash_code(self, code: str) -> str:
+        """Gera um hash SHA-256 para o código de recuperação."""
+        return hashlib.sha256(code.encode('utf-8')).hexdigest()
 
-async def create_recovery_codes(
-    db: AsyncSession, *, user: User
-) -> List[str]:
-    """
-    Apaga códigos antigos, gera novos códigos de recuperação,
-    guarda os seus hashes e retorna os códigos em texto simples.
-    """
-    # 1. Apagar todos os códigos antigos
-    await delete_all_codes_for_user(db, user_id=user.id)
+    # ... (restante das funções do CRUD) ...
 
-    # 2. Gerar novos códigos em texto simples
-    plain_codes = generate_plain_recovery_codes()
-    
-    # 3. Criar os objetos do modelo com os hashes
-    db_codes = []
-    for code in plain_codes:
-        hashed_code = get_password_hash(code) # Usar o mesmo hash da senha
-        db_codes.append(
+    def generate_plain_code(self) -> str:
+        """Gera um código de recuperação simples (ex: 8-10 caracteres)."""
+        # Ex: "abcd-1234"
+        return f"{secrets.token_hex(4)}-{secrets.token_hex(4)}"
+
+    async def create_recovery_codes(self, db: AsyncSession, *, user: User, count: int = 8) -> List[str]:
+        """Gera e salva novos códigos de recuperação, apagando os antigos."""
+        
+        # 1. Apagar todos os códigos antigos
+        await self.delete_all_codes_for_user(db=db, user_id=user.id)
+        
+        # 2. Gerar novos códigos
+        plain_codes = [self.generate_plain_code() for _ in range(count)]
+        db_codes = [
             MFARecoveryCode(
                 user_id=user.id,
-                hashed_code=hashed_code,
+                hashed_code=self.hash_code(code),
                 is_used=False
-            )
+            ) for code in plain_codes
+        ]
+        
+        db.add_all(db_codes)
+        await db.commit()
+        
+        return plain_codes
+
+    async def get_valid_recovery_code(self, db: AsyncSession, *, user: User, plain_code: str) -> MFARecoveryCode | None:
+        """Verifica se um código de recuperação é válido e não foi usado."""
+        hashed_code = self.hash_code(plain_code)
+        
+        stmt = select(MFARecoveryCode).where(
+            MFARecoveryCode.user_id == user.id,
+            MFARecoveryCode.hashed_code == hashed_code,
+            MFARecoveryCode.is_used == False
         )
-    
-    # 4. Adicionar à sessão e fazer commit
-    db.add_all(db_codes)
-    await db.commit()
-    
-    logger.info(f"Gerados {len(plain_codes)} novos códigos de recuperação para o user ID {user.id}")
-    
-    # 5. Retornar os códigos em texto simples (para mostrar ao utilizador)
-    return plain_codes
+        result = await db.execute(stmt)
+        return result.scalars().first()
 
-async def delete_all_codes_for_user(db: AsyncSession, *, user_id: int) -> int:
-    """Apaga todos os códigos de recuperação de um utilizador (ex: ao desativar MFA)."""
-    stmt = delete(MFARecoveryCode).where(MFARecoveryCode.user_id == user_id)
-    result = await db.execute(stmt)
-    # Não precisa de commit() aqui se for chamado por outra função que faz commit
-    # Mas se for chamado sozinho, precisa. Adicionamos por segurança.
-    await db.commit() 
-    return result.rowcount
+    async def mark_code_as_used(self, db: AsyncSession, *, db_code: MFARecoveryCode) -> MFARecoveryCode:
+        """Marca um código de recuperação como utilizado."""
+        db_code.is_used = True
+        db_code.used_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        db.add(db_code)
+        await db.commit()
+        await db.refresh(db_code)
+        return db_code
 
-async def get_valid_recovery_code(
-    db: AsyncSession, *, user: User, plain_code: str
-) -> Optional[MFARecoveryCode]:
-    """
-    Encontra um código de recuperação válido e não utilizado para um utilizador.
-    """
-    # 1. Buscar TODOS os códigos não utilizados do utilizador
-    # (Não podemos fazer query pelo hash, pois o plain_code não gera o mesmo hash sempre)
-    stmt = select(MFARecoveryCode).where(
-        MFARecoveryCode.user_id == user.id,
-        MFARecoveryCode.is_used == False
-    )
-    result = await db.execute(stmt)
-    unused_codes = result.scalars().all()
+    async def delete_all_codes_for_user(self, db: AsyncSession, *, user_id: int) -> int:
+        """Apaga todos os códigos de recuperação de um usuário."""
+        stmt = delete(MFARecoveryCode).where(MFARecoveryCode.user_id == user_id)
+        result = await db.execute(stmt)
+        await db.commit()
+        return result.rowcount
 
-    # 2. Iterar e verificar o hash de cada um
-    for db_code in unused_codes:
-        # Usar a mesma verificação da senha
-        if verify_password(plain_code, db_code.hashed_code):
-            return db_code # Encontrado!
-            
-    # 3. Se o loop terminar, nenhum código válido foi encontrado
-    return None
-
-async def mark_code_as_used(
-    db: AsyncSession, *, db_code: MFARecoveryCode
-) -> MFARecoveryCode:
-    """Marca um código de recuperação específico como utilizado."""
-    db_code.is_used = True
-    db.add(db_code)
-    await db.commit()
-    await db.refresh(db_code)
-    return db_code
+# Renomeado para a instância ser igual ao que é importado por outros ficheiros (crud_mfa_recovery_code)
+crud_mfa_recovery_code = CRUDMFARecoveryCode(MFARecoveryCode)

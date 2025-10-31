@@ -60,10 +60,16 @@ const authStore = useAuthStore();
 const router = useRouter();
 const $q = useQuasar();
 
+// --- FUNÇÃO CORRIGIDA ---
 const handleLogin = async () => {
   isLoading.value = true;
   try {
-    const loginSuccess = await authStore.login(email.value, password.value);
+    // 1. A action 'login' espera UM objeto (LoginCredentials).
+    // 2. Passamos o email e a senha dentro desse objeto.
+    const loginSuccess = await authStore.login({
+      email: email.value,
+      password: password.value
+    });
 
     if (loginSuccess) {
       $q.notify({
@@ -72,14 +78,12 @@ const handleLogin = async () => {
         icon: 'check',
         position: 'top',
       });
-      await router.push('/hub');
+      // O redirecionamento principal é feito na store.
+      // Este 'push' serve como um fallback ou destino pós-login.
+      await router.push('/hub'); 
     } else {
-      $q.notify({
-        color: 'negative',
-        message: 'E-mail ou senha inválidos.',
-        icon: 'warning',
-        position: 'top',
-      });
+      // A notificação de erro já é tratada pela store,
+      // então não precisamos duplicá-la aqui.
     }
   } catch (error) {
     console.error('Falha crítica no processo de login:', error);
@@ -113,4 +117,4 @@ const handleLogin = async () => {
   -webkit-text-fill-color: transparent;
   font-weight: 700;
 }
-</style>
+</style> 

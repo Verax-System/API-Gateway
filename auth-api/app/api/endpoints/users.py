@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 # --- IMPORTAR A NOVA DEPENDÊNCIA DE ADMIN ---
 from app.api.dependencies import get_current_active_user, get_current_admin_user
 # --- FIM IMPORTAÇÃO ---
-from app.crud.crud_user import user as crud_user
+from app.crud.crud_user import crud_user
 from app.db.session import get_db
 from app.schemas.user import User as UserSchema, UserCreate, UserUpdate
 # Importar dependência de autenticação do módulo auth
@@ -44,6 +44,19 @@ async def create_user(
 
     # Retorna o usuário criado (sem o token)
     return db_user
+
+@router.get("/me", response_model=UserSchema)
+async def read_user_me(
+    current_user: UserModel = Depends(get_current_active_user),
+) -> Any:
+    """
+    Retorna o usuário logado atualmente (token deve ser válido e usuário ativo).
+    (Endpoint seguro, requer usuário ativo)
+    """
+    # A dependência get_current_active_user já validou o token e buscou o usuário.
+    # Basta retornar o objeto do usuário.
+    return current_user # Adicione esta seção inteira
+
 
 @router.get("/", response_model=List[UserSchema])
 async def read_users(

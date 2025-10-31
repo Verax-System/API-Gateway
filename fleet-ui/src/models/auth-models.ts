@@ -1,5 +1,6 @@
-// --- Conteúdo Existente ---
-export interface LoginForm {
+// --- Conteúdo Corrigido ---
+// Renomeado para LoginCredentials para corrigir o erro de importação na store
+export interface LoginCredentials {
   email: string;
   password: string;
 }
@@ -13,7 +14,8 @@ export interface Organization {
   sector: UserSector;
 }
 
-export interface User {
+// Renomeado de 'User' para 'UserProfile' para corrigir o erro de importação na store
+export interface UserProfile {
   id: number;
   full_name: string;
   email: string;
@@ -31,13 +33,21 @@ export interface User {
 export interface TokenData {
   access_token: string;
   token_type: string;
-  user: User;
+  user: UserProfile;
 }
 
+// O nome real para a requisição de recuperação de senha (apenas email)
 export interface PasswordRecoveryRequest {
   email: string;
 }
 
+// O nome que a store estava usando para o reset final (token + nova senha)
+export interface PasswordResetData {
+  token: string;
+  new_password: string;
+}
+
+// Interface que a store estava importando
 export interface PasswordResetRequest {
   token: string;
   new_password: string;

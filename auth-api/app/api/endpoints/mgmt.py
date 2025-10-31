@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 # CORREÇÃO: Importação de 'get_current_active_superuser' está CORRETA.
 from app.api.dependencies import get_current_active_superuser
-from app.crud.crud_user import user as crud_user
+from app.crud.crud_user import crud_user
 # CORREÇÃO: Importar 'get_db' do local correto (session.py)
 from app.db.session import get_db
 from app.schemas.user import User, UserCreate, UserUpdate

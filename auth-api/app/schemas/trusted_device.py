@@ -1,16 +1,31 @@
-# auth_api/app/schemas/trusted_device.py
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
 
-class TrustedDeviceInfo(BaseModel):
-    """Informações sobre um dispositivo confiável registrado."""
+# --- Schemas de Base/CRUD ---
+
+class TrustedDeviceBase(BaseModel):
+    """Schema base para TrustedDevice."""
+    user_agent: Optional[str] = None
+    ip_address: Optional[str] = None
+
+class TrustedDeviceCreate(TrustedDeviceBase):
+    """Schema usado pelo CRUD para criar um dispositivo. Apenas metadados."""
+    # O token e a expiração são gerados na lógica de CRUD.
+    pass
+
+class TrustedDeviceUpdate(TrustedDeviceBase):
+    """Schema de Atualização."""
+    # Raramente usado, mas necessário para CRUDBase.
+    pass
+
+# --- Schema de Leitura (Resposta da API) ---
+
+class TrustedDeviceInfo(TrustedDeviceBase):
+    """Schema de saída para listar dispositivos confiáveis (sessões)."""
     id: int
-    description: Optional[str]
-    ip_address: Optional[str]
-    user_agent: Optional[str]
+    expires_at: datetime
     created_at: datetime
-    last_used_at: Optional[datetime]
 
     class Config:
         from_attributes = True

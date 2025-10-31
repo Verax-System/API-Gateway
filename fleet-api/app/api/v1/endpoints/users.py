@@ -2,16 +2,16 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, s
 from sqlalchemy.orm import Session
 from typing import Any, List, Optional
 from app.api import deps
-from app.crud.crud_user import crud_user
-from app.schemas.user_schema import User, UserCreate, UserUpdate
-# from app.core.security import get_password_hash # Não é necessário, o crud_user faz
+from app.crud.crud_user import User as crud_user
+# CORREÇÃO: Importa UserPublic e o apelida de UserSchema
+from app.schemas.user_schema import UserPublic as UserSchema, UserCreate, UserUpdate
 from app.models.user_model import User as UserModel
 from app.services.file_service import save_upload_file
 
 router = APIRouter()
 
 # --- NOVO ENDPOINT DE SINCRONIZAÇÃO (FASE 4) ---
-@router.post("/internal/sync_user", response_model=User, status_code=status.HTTP_201_CREATED)
+@router.post("/internal/sync_user", response_model=UserSchema, status_code=status.HTTP_201_CREATED)
 def sync_user_profile(
     *,
     db: Session = Depends(deps.get_db),
@@ -32,7 +32,7 @@ def sync_user_profile(
 # --- FIM DO NOVO ENDPOINT ---
 
 
-@router.get("/me", response_model=User)
+@router.get("/me", response_model=UserSchema)
 def read_users_me(
     current_user: UserModel = Depends(deps.get_current_active_user),
 ) -> Any:
@@ -41,7 +41,7 @@ def read_users_me(
     """
     return current_user
 
-@router.post("/", response_model=User, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=UserSchema, status_code=status.HTTP_201_CREATED)
 def create_user(
     *,
     db: Session = Depends(deps.get_db),
@@ -64,7 +64,7 @@ def create_user(
     
     return user
 
-@router.get("/", response_model=List[User])
+@router.get("/", response_model=List[UserSchema])
 def read_users(
     db: Session = Depends(deps.get_db),
     skip: int = 0,
@@ -77,7 +77,7 @@ def read_users(
     users = crud_user.get_multi(db, skip=skip, limit=limit)
     return users
 
-@router.put("/me", response_model=User)
+@router.put("/me", response_model=UserSchema)
 def update_user_me(
     *,
     db: Session = Depends(deps.get_db),
@@ -105,7 +105,7 @@ def update_user_me(
     user = crud_user.update(db, db_obj=current_user, obj_in=user_in)
     return user
 
-@router.get("/{user_id}", response_model=User)
+@router.get("/{user_id}", response_model=UserSchema)
 def read_user_by_id(
     user_id: int,
     db: Session = Depends(deps.get_db),
@@ -119,7 +119,7 @@ def read_user_by_id(
         raise HTTPException(status_code=404, detail="User not found")
     return user
 
-@router.put("/{user_id}", response_model=User)
+@router.put("/{user_id}", response_model=UserSchema)
 def update_user(
     *,
     db: Session = Depends(deps.get_db),
@@ -136,7 +136,7 @@ def update_user(
     user = crud_user.update(db, db_obj=user, obj_in=user_in)
     return user
 
-@router.delete("/{user_id}", response_model=User)
+@router.delete("/{user_id}", response_model=UserSchema)
 def delete_user(
     *,
     db: Session = Depends(deps.get_db),

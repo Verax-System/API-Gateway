@@ -11,8 +11,8 @@ const api = axios.create({
 api.interceptors.request.use(
   (config) => {
     const authStore = useAuthStore();
-    // Tenta pegar da store, se não, do LocalStorage
-    const token = authStore.token || LocalStorage.getItem('token'); 
+    // CORREÇÃO: Tenta pegar da store (accessToken)
+    const token = authStore.accessToken || LocalStorage.getItem('token'); 
 
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;

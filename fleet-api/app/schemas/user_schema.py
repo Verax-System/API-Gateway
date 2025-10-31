@@ -59,6 +59,9 @@ class UserPublic(UserBase):
 
     model_config = { "from_attributes": True }
 
+# Alias para compatibilidade, o endpoint 'users.py' agora usa 'UserPublic' explicitamente.
+User = UserPublic
+
 class UserRegister(BaseModel):
     full_name: str
     email: str
@@ -92,4 +95,3 @@ class LeaderboardUser(BaseModel):
 class LeaderboardResponse(BaseModel):
     leaderboard: List[LeaderboardUser]
     primary_metric_unit: str
-

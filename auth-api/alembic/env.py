@@ -16,12 +16,24 @@ from pathlib import Path
 # Sobe dois níveis (alembic/ -> raiz) e adiciona ao path
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
+# ... (outros imports)
+from sqlalchemy import engine_from_config
+# ...
+
+# Adicione estas linhas para importar seus modelos
 from app.db.base import Base
-from app.models import user # noqa F401
-from app.models import refresh_token # noqa F401
-# --- ADICIONAR NOVO MODELO ---
-from app.models import mfa_recovery_code # noqa F401
-from app.models import trusted_device # noqa F401 <-- ADICIONE ESTA LINHA
+from app.models.user import User
+from app.models.refresh_token import RefreshToken
+from app.models.trusted_device import TrustedDevice
+from app.models.mfa_recovery_code import MFARecoveryCode
+# ... (adicione outros modelos se houver)
+
+# ... (código do Alembic) ...
+
+# Certifique-se que o target_metadata está definido para o seu Base
+target_metadata = Base.metadata
+
+# ... (resto do arquivo)
 # --- FIM ADIÇÃO ---
 # --- Fim Importar Modelos ---
 

@@ -19,9 +19,18 @@ export const useAuthStore = defineStore('auth', {
   },
 
   actions: {
-    async login(loginData: LoginCredentials): Promise<void> {
+    // --- FUNÇÃO CORRIGIDA ---
+    async login(loginData: LoginCredentials): Promise<boolean> {
       try {
-        const response = await api.post('/api/v1/auth/token', loginData, {
+        // 1. O backend (OAuth2PasswordRequestForm) espera 'username' e 'password'.
+        // 2. Precisamos formatar os dados como x-www-form-urlencoded usando URLSearchParams.
+        const params = new URLSearchParams();
+        // Assumindo que LoginCredentials tem 'email' e 'password'.
+        // Mapeamos 'email' (do UI) para 'username' (que a API espera).
+        params.append('username', loginData.email); 
+        params.append('password', loginData.password);
+
+        const response = await api.post('/api/v1/auth/token', params, {
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         });
 
@@ -34,8 +43,8 @@ export const useAuthStore = defineStore('auth', {
         await this.fetchUser();
 
         // --- INÍCIO DA CORREÇÃO DE REDIRECIONAMENTO (FASE 2) ---
-        const params = new URLSearchParams(window.location.search);
-        const redirectUrl = params.get('redirect');
+        const urlParams = new URLSearchParams(window.location.search);
+        const redirectUrl = urlParams.get('redirect');
 
         if (redirectUrl) {
           // Se houver um 'redirect' (ex: ?redirect=/fleet/)
@@ -51,6 +60,8 @@ export const useAuthStore = defineStore('auth', {
         }
         // --- FIM DA CORREÇÃO ---
 
+        return true; // Retorna sucesso
+
       } catch (error) {
         this.isAuthenticated = false;
         this.token = null;
@@ -61,7 +72,7 @@ export const useAuthStore = defineStore('auth', {
           type: 'negative',
           message: 'Login ou senha inválidos.',
         });
-        throw error;
+        return false; // Retorna falha
       }
     },
 

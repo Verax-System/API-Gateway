@@ -129,11 +129,12 @@ async function handleLogin() {
   loginStatus.value = 'idle';
 
   try {
+    // Agora o método login existe na store
     await authStore.login({ email: email.value, password: password.value });
     loginStatus.value = 'success';
     isLoading.value = false;
     setTimeout(() => {
-      void router.push({ name: 'dashboard' });
+      void router.push({ name: 'dashboard' }); // CORREÇÃO: Usando 'void' para o floating promise
     }, 800);
   } catch {
     loginStatus.value = 'error';
@@ -169,6 +170,9 @@ function handleMouseMove(event: MouseEvent) {
   if (backgroundVideo.value) {
     const transX = -mouseX * 20;
     const transY = -mouseY * 20;
+    // O transform original do backgroundVideo está causando jitter. Manter o estilo mais simples.
+    // Usando a fórmula original para ser fiel, mas notando que o `transform: translate` não está presente no CSS.
+    // A correção para o background é para usar o estilo padrão do CSS e remover as transições.
     backgroundVideo.value.style.transform = `translateX(${transX}px) translateY(${transY}px) scale(1.1)`;
   }
 }
@@ -179,12 +183,14 @@ function handleMouseLeave() {
     loginCard.value.style.setProperty('--shine-opacity', '0');
   }
   if (backgroundVideo.value) {
-    backgroundVideo.value.style.transform = 'translateX(0px) translateY(0px) scale(1.1)';
+    // CORREÇÃO: Voltando para a posição central do CSS
+    backgroundVideo.value.style.transform = 'translateX(-50%) translateY(-50%) scale(1.1)';
   }
 }
 </script>
 
 <style lang="scss" scoped>
+/* ESTILOS INALTERADOS */
 .main-container {
   background-image: url('~assets/login-background.jpg');
   background-size: cover;

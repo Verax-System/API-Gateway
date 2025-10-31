@@ -4,7 +4,7 @@ services:
     image: nginx:1.25-alpine
     container_name: api-gateway
     ports:
-      - "8000:80" # <-- CORRIGIDO: Acessar via http://localhost:8000
+      - "8000:80"
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf
     networks:
@@ -23,18 +23,20 @@ services:
     container_name: auth-api
     env_file: ./auth-api/.env
     command: >
-      sh -c "echo 'Auth-API: Aguardando o banco de dados...' && 
-             sleep 10 && 
-             echo 'Auth-API: Rodando migrações...' && 
-             alembic upgrade head && 
-             echo 'Auth-API: Iniciando servidor...' && 
-             uvicorn main:app --host 0.0.0.0 --port 8001 --reload" # <-- CORRIGIDO: Porta 8001
+      sh -c "echo 'Auth-API: Aguardando o banco de dados ficar saudável...' && 
+              echo 'Auth-API: Rodando migrações...' && 
+              alembic upgrade head && 
+              echo 'Auth-API: Criando dados iniciais (se necessário)...' &&
+              python -m app.db.initial_data &&
+              echo 'Auth-API: Iniciando servidor...' && 
+              uvicorn main:app --host 0.0.0.0 --port 8001 --reload"
     volumes:
       - ./auth-api:/app
     networks:
       - plataforma-network
     depends_on:
-      - auth-db
+      auth-db:
+        condition: service_healthy
 
   auth-db:
     image: postgres:15-alpine
@@ -46,10 +48,15 @@ services:
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=Admin123
-      - POSTGRES_DB=auth # <-- CORRIGIDO: Cria o banco 'auth'
+      - POSTGRES_DB=auth
     restart: unless-stopped
     networks:
       - plataforma-network
+    healthcheck: # <-- CORREÇÃO: Adicionado Healthcheck
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   auth-ui:
     build: ./auth-ui
@@ -67,18 +74,18 @@ services:
     container_name: sales-api
     env_file: ./sales-api/.env
     command: >
-      sh -c "echo 'Sales-API: Aguardando o banco de dados...' &&
-             sleep 10 &&
-             echo 'Sales-API: Rodando migrações...' &&
-             alembic upgrade head &&
-             echo 'Sales-API: Iniciando servidor...' &&
-             uvicorn main:app --host 0.0.0.0 --port 8002 --reload" # <-- CORRIGIDO: Porta 8002
+      sh -c "echo 'Sales-API: Aguardando o banco de dados ficar saudável...' &&
+              echo 'Sales-API: Rodando migrações...' &&
+              alembic upgrade head &&
+              echo 'Sales-API: Iniciando servidor...' &&
+              uvicorn main:app --host 0.0.0.0 --port 8002 --reload" # <-- sleep 10 REMOVIDO
     volumes:
       - ./sales-api:/app
     networks:
       - plataforma-network
     depends_on:
-      - sales-db
+      sales-db: # <-- CORREÇÃO: Espera a condição 'service_healthy'
+        condition: service_healthy
 
   sales-db:
     image: postgres:15-alpine
@@ -90,10 +97,15 @@ services:
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=Admin123
-      - POSTGRES_DB=sales # <-- CORRIGIDO: Cria o banco 'sales'
+      - POSTGRES_DB=sales
     restart: unless-stopped
     networks:
       - plataforma-network
+    healthcheck: # <-- CORREÇÃO: Adicionado Healthcheck
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   sales-ui:
     build: ./sales-ui
@@ -111,30 +123,36 @@ services:
     container_name: fleet-api
     env_file: ./fleet-api/.env
     command: >
-      sh -c "echo 'Fleet-API: Aguardando o banco de dados...' &&
-             sleep 10 &&
-             echo 'Fleet-API: Rodando migrações...' &&
-             alembic upgrade head &&
-             echo 'Fleet-API: Iniciando servidor...' &&
-             uvicorn main:app --host 0.0.0.0 --port 8003 --reload" # <-- CORRIGIDO: Porta 8003
+      sh -c "echo 'Fleet-API: Aguardando o banco de dados ficar saudável...' &&
+              echo 'Fleet-API: Rodando migrações...' &&
+              alembic upgrade head &&
+              echo 'Fleet-API: Iniciando servidor...' &&
+              uvicorn main:app --host 0.0.0.0 --port 8003 --reload" # <-- sleep 10 REMOVIDO
     volumes:
       - ./fleet-api:/app
       - ./fleet-api/static/uploads:/app/static/uploads
     networks:
       - plataforma-network
     depends_on:
-      - fleet-db
+      fleet-db: # <-- CORREÇÃO: Espera a condição 'service_healthy'
+        condition: service_healthy
 
   fleet-db:
     image: postgres:15-alpine
     container_name: fleet-db
     env_file: ./fleet-api/.env # O fleet-db usa as vars daqui (POSTGRES_DB=frota_agil)
     ports:
-      - "5435:5432" # <-- CORRIGIDO: Evita conflito com a porta 5434
+      - "5435:5432"
     volumes:
       - fleet-data:/var/lib/postgresql/data
     networks:
       - plataforma-network
+    healthcheck: # <-- CORREÇÃO: Adicionado Healthcheck
+      # Nota: $$POSTGRES_USER funciona mesmo com env_file
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   fleet-ui:
     build: ./fleet-ui
@@ -151,7 +169,7 @@ networks:
     driver: bridge
 
 volumes:
-  postgres_data: # <-- CORRIGIDO: Faltava este
+  postgres_data:
   postgres_sales_data:
   postgres_auth_data:
   fleet-data:
